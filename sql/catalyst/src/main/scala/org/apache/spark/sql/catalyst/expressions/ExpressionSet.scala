@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.catalyst.expressions
 
-import scala.collection.{mutable, GenTraversableOnce}
+import scala.collection.{mutable, GenSet, GenTraversableOnce}
 import scala.collection.mutable.ArrayBuffer
 
 object ExpressionSet {
@@ -91,6 +91,33 @@ class ExpressionSet protected(
   }
 
   override def iterator: Iterator[Expression] = originals.iterator
+
+  def expand: Set[Expression] = this
+
+  def convertToCanonicalizedIfRequired(ele: Expression): Expression = ele
+
+  def getConstraintsSubsetOfAttributes(attribsOfInterest: Seq[Attribute]): Seq[Expression] =
+    Seq.empty
+
+  def updateConstraints(outputAttribs: Seq[Attribute],
+    inputAttribs: Seq[Attribute], projectList: Seq[NamedExpression],
+    oldAliasedConstraintsCreator: Option[Seq[NamedExpression] => Set[Expression]]):
+  ExpressionSet = oldAliasedConstraintsCreator.map(aliasCreator =>
+      this.union(aliasCreator(projectList))).getOrElse(this)
+
+  def attributesRewrite(mapping: AttributeMap[Attribute]): ExpressionSet =
+    ExpressionSet(this.map(_ transform {
+      case a: Attribute => mapping(a)
+    }))
+
+  override def union(that: GenSet[Expression]): ExpressionSet =
+    super.union(that).asInstanceOf[ExpressionSet]
+
+  def withNewConstraints(filters: Set[Expression]): ExpressionSet = ExpressionSet(filters)
+
+  def rewriteUsingAlias(expr: Expression): Expression = expr
+
+  def getConstraintsWithDecanonicalizedNullIntolerant: Set[Expression] = this
 
   /**
    * Returns a string containing both the post [[Canonicalize]] expressions and the original

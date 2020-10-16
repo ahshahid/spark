@@ -23,6 +23,7 @@ import org.apache.spark.sql.catalyst.analysis._
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.statsEstimation.LogicalPlanStats
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StructType
 
 
@@ -173,7 +174,13 @@ abstract class UnaryNode extends LogicalPlan {
     allConstraints -- child.constraints
   }
 
-  override protected def validConstraints: Set[Expression] = child.constraints
+  override protected def validConstraints: ExpressionSet =
+    if (!this.inputSet.subsetOf(this.outputSet)) {
+      child.constraints.updateConstraints(this.output,
+        child.output, Seq.empty[NamedExpression], None)
+    } else {
+      child.constraints
+    }
 }
 
 /**

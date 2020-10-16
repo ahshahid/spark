@@ -17,7 +17,10 @@
 
 package org.apache.spark.sql.catalyst.plans.logical
 
+import scala.collection.mutable
+
 import org.apache.spark.sql.catalyst.expressions._
+import org.apache.spark.sql.internal.SQLConf
 
 
 trait QueryPlanConstraints extends ConstraintHelper { self: LogicalPlan =>
@@ -28,17 +31,31 @@ trait QueryPlanConstraints extends ConstraintHelper { self: LogicalPlan =>
    * evaluate to `true` for all rows produced.
    */
   lazy val constraints: ExpressionSet = {
+    val useOptimizedConstraint = SQLConf.get.useOptimizedConstraintPropagation
     if (conf.constraintPropagationEnabled) {
-      ExpressionSet(
-        validConstraints
-          .union(inferAdditionalConstraints(validConstraints))
-          .union(constructIsNotNullConstraints(validConstraints, output))
-          .filter { c =>
-            c.references.nonEmpty && c.references.subsetOf(outputSet) && c.deterministic
-          }
-      )
+      val validConstraintsTemp = validConstraints
+      val newConstraints = validConstraintsTemp.union(
+        inferAdditionalConstraints(validConstraintsTemp)).union(
+        constructIsNotNullConstraints(
+          validConstraintsTemp.getConstraintsWithDecanonicalizedNullIntolerant, output))
+
+      val filteredNewConstraints = newConstraints.filter(c =>
+        c.references.nonEmpty && c.references.subsetOf(outputSet) && c.deterministic)
+      if (useOptimizedConstraint) {
+        // Since the iterator used in filter returns only the
+        // original filter conditions, the attribute equivalence list,
+        // etc is lost. so take it from the newConstraints
+        val castedExpressionSet = newConstraints.asInstanceOf[ConstraintSet]
+        new ConstraintSet(filteredNewConstraints.to[mutable.Buffer],
+          castedExpressionSet.attribRefBasedEquivalenceList,
+          castedExpressionSet.expressionBasedEquivalenceList)
+      } else {
+        ExpressionSet(filteredNewConstraints)
+      }
     } else {
-      ExpressionSet(Set.empty)
+      if (useOptimizedConstraint) {
+        new ConstraintSet()
+      } else ExpressionSet(Set.empty)
     }
   }
 
@@ -50,7 +67,9 @@ trait QueryPlanConstraints extends ConstraintHelper { self: LogicalPlan =>
    *
    * See [[Canonicalize]] for more details.
    */
-  protected def validConstraints: Set[Expression] = Set.empty
+  protected def validConstraints: ExpressionSet =
+    if (SQLConf.get.useOptimizedConstraintPropagation) new ConstraintSet()
+    else ExpressionSet(Set.empty[Expression])
 }
 
 trait ConstraintHelper {

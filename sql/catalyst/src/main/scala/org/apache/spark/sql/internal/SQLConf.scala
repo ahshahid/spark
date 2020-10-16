@@ -179,6 +179,13 @@ object SQLConf {
       .intConf
       .createWithDefault(10)
 
+  val OPTIMIZER_OPTIMIZED_CONSTRAINT_PROPAGATION =
+    buildConf("spark.sql.optimizer.optimizedConstraintPropagation.enabled")
+      .internal()
+      .doc("use optimized algorithm for constraint propagation")
+      .booleanConf
+      .createWithDefault(true)
+
   val COMPRESS_CACHED = buildConf("spark.sql.inMemoryColumnarStorage.compressed")
     .doc("When set to true Spark SQL will automatically select a compression codec for each " +
       "column based on statistics of the data.")
@@ -1729,6 +1736,8 @@ class SQLConf extends Serializable with Logging {
   def gatherFastStats: Boolean = getConf(GATHER_FASTSTAT)
 
   def optimizerMetadataOnly: Boolean = getConf(OPTIMIZER_METADATA_ONLY)
+
+  def useOptimizedConstraintPropagation: Boolean = getConf(OPTIMIZER_OPTIMIZED_CONSTRAINT_PROPAGATION)
 
   def wholeStageEnabled: Boolean = getConf(WHOLESTAGE_CODEGEN_ENABLED)
 

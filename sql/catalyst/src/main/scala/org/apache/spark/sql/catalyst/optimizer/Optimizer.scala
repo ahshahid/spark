@@ -765,9 +765,11 @@ object InferFiltersFromConstraints extends Rule[LogicalPlan]
   private def inferFilters(plan: LogicalPlan): LogicalPlan = plan transform {
     case filter @ Filter(condition, child) =>
       val newFilters = filter.constraints --
-        (child.constraints ++ splitConjunctivePredicates(condition))
-      if (newFilters.nonEmpty) {
-        Filter(And(newFilters.reduce(And), condition), child)
+        (child.constraints ++ splitConjunctivePredicates(condition).
+          map(filter.constraints.convertToCanonicalizedIfRequired).toSet)
+      val decanonicalzedNewFilters = newFilters.map(filter.constraints.rewriteUsingAlias)
+      if (decanonicalzedNewFilters.nonEmpty) {
+        Filter(And(decanonicalzedNewFilters.reduce(And), condition), child)
       } else {
         filter
       }
@@ -779,8 +781,11 @@ object InferFiltersFromConstraints extends Rule[LogicalPlan]
         case _: InnerLike | LeftSemi =>
           val allConstraints = getAllConstraints(left, right, conditionOpt)
           val newLeft = inferNewFilter(left, allConstraints)
+          val newerLeft = inferAdditionalNewFilter(newLeft, right.constraints, conditionOpt)
           val newRight = inferNewFilter(right, allConstraints)
-          join.copy(left = newLeft, right = newRight)
+          val newerRight = inferAdditionalNewFilter(newRight, left.constraints, conditionOpt)
+
+          join.copy(left = newerLeft, right = newerRight)
 
         // For right outer join, we can only infer additional filters for left side.
         case RightOuter =>
@@ -798,21 +803,110 @@ object InferFiltersFromConstraints extends Rule[LogicalPlan]
       }
   }
 
+  // TODO :Optimize further so as not to expand the number of constraints
+  // for a given canonicalized constraint, by creating a temporary constraint
+  // for each of the element in the list
   private def getAllConstraints(
       left: LogicalPlan,
       right: LogicalPlan,
       conditionOpt: Option[Expression]): Set[Expression] = {
-    val baseConstraints = left.constraints.union(right.constraints)
-      .union(conditionOpt.map(splitConjunctivePredicates).getOrElse(Nil).toSet)
+    val baseConstraints = left.constraints.expand.union(right.constraints.expand).
+      union(conditionOpt.map(splitConjunctivePredicates).getOrElse(Nil).toSet)
     baseConstraints.union(inferAdditionalConstraints(baseConstraints))
   }
 
+  /**
+   * This function is similar to [[inferNewFilter()]] but it is used to create
+   * new filter of compound types for push down on the joining table.
+   * The issue is that when stock spark generates all the combination of constraints,
+   * (i.e with aliases as well as replacing the attribute of say LHS table with the joining
+   * RHS table's join condition), it replaces only one attribute in a constraint. As a result
+   * the constraints of the form of compound types ( i.e containing more than 1 attributes)
+   * are not created for push down.
+   * To elaborate:
+   * if LHS table is ( a, b, c) with projection (a1, a2, b, c) and RHS (x, y, z)
+   * with join condition a1 = x and b = y
+   * and say a constraint of the form a + b > 10 is present on LHS
+   * now stock spark will generate following constraints in expanded form
+   * a + b > 10, a1 +b > 10, a2 + b > 10
+   * since a1 = x , it will also generate
+   * x + b > 10
+   * and since b = y , it will generate
+   * a + y > 10, a1 + y > 10, a2 + y > 10
+   * so the problem is that since it is replacing one join variable at a time, a compound
+   * constraint never gets created. (i.e x + y > 10).
+   * The below code explicitly asks the Optimized Constrains function to return the substituted
+   * compound constraints if available, for push down. For stock spark the function is sort
+   * of no-op
+   *
+   * @param plan                Logical Plan on which pushdown filters are needed
+   * @param otherSideConstraint the constraints present on the other side of the join
+   * @param conditionOpt
+   * @return
+   */
+  private def inferAdditionalNewFilter(plan: LogicalPlan, otherSideConstraint: ExpressionSet,
+    conditionOpt: Option[Expression]): LogicalPlan = {
+    conditionOpt.map(condition => {
+      val allEqualityAttribsMappings = condition.collect {
+        case EqualTo(l: Attribute, r: Attribute) => l -> r
+        // TODO: Asif: commenting the code till its implications are clear
+        // case EqualNullSafe(l: Attribute, r: Attribute) => l -> r
+      }
+
+      val attribsOfOtherSide = allEqualityAttribsMappings.flatMap(t => Seq(t._1, t._2)).
+        diff(plan.output)
+      if (attribsOfOtherSide.size > 1) {
+        val constraintsOfInterest = otherSideConstraint.
+          getConstraintsSubsetOfAttributes(attribsOfOtherSide).map(expr => expr.transformUp {
+          case attr: Attribute => allEqualityAttribsMappings.
+            find(tup => tup._1 == attr || tup._2 == attr).
+            map(tup => if (tup._1 == attr) tup._2 else tup._1).getOrElse(
+            throw new IllegalStateException("The mapping should have existed"))
+        }).filterNot(plan.constraints.contains)
+        if (constraintsOfInterest.isEmpty) {
+          plan
+        } else {
+          Filter(constraintsOfInterest.reduce(And), plan)
+        }
+      } else {
+        plan
+      }
+
+    }).getOrElse(plan)
+  }
+
+  /**
+   * This function identifies new filter conditions which can be pushed down
+   * in a given plan of the join. The constraints passed as parameter is a blown
+   * up set of constraints , which implies that it has all trivial combination
+   * of constraints such that each alias'ed attribute is represented atleast once,
+   * if at all possible. Since the constraints set is made up of both the sides
+   * of the Joining tables, with the attributes of join condition being represented
+   * in each of the valid constraints, the constraints that can be pushed down are
+   * obtained by identifying those constraints whose references are subset of the
+   * plan on which push down is intended.
+   * For eg: If original constraint for LHS table (a, b, c) & projection (a1, a2)
+   * had a constraint (a > 2) and is joined with RHS table (x, y, z) with join
+   * condition a1 = x
+   * the blown up constraints set would contain
+   * a > 2, a1 > 2, a2 > 2, isNotNull(a), isNotNull(a1), isNotNull(a2),
+   * and since a1 = x, the constraintset will also contain x > 2 and isNotNull(x)
+   * , which is formed because of presence of a1 in expanded constraints
+   *
+   * @param plan        The plan for which the constraints are to be pushed down
+   * @param constraints the set of expanded constraints which are already substituted
+   *                    by the joining attributes appropriately. This is actually an
+   *                    instance of ExpressionSet ( which means equals is implemented
+   *                    on canonicalized expression, hence no duplicate constraints are
+   *                    allowed automatically)
+   * @return Modified Logical Plan with pushed down filter
+   */
   private def inferNewFilter(plan: LogicalPlan, constraints: Set[Expression]): LogicalPlan = {
     val newPredicates = constraints
       .union(constructIsNotNullConstraints(constraints, plan.output))
       .filter { c =>
         c.references.nonEmpty && c.references.subsetOf(plan.outputSet) && c.deterministic
-      } -- plan.constraints
+      } -- plan.constraints.expand
     if (newPredicates.isEmpty) {
       plan
     } else {

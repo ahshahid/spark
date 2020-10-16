@@ -66,7 +66,7 @@ trait PlanTestBase extends PredicateHelper { self: Suite =>
    * Since attribute references are given globally unique ids during analysis,
    * we must normalize them to check if two different queries are identical.
    */
-  protected def normalizeExprIds(plan: LogicalPlan) = {
+  protected def normalizeExprIds(plan: LogicalPlan) =
     plan transformAllExpressions {
       case s: ScalarSubquery =>
         s.copy(exprId = ExprId(0))
@@ -83,7 +83,6 @@ trait PlanTestBase extends PredicateHelper { self: Suite =>
       case lv: NamedLambdaVariable =>
         lv.copy(exprId = ExprId(0), value = null)
     }
-  }
 
   /**
    * Normalizes plans:
@@ -96,13 +95,15 @@ trait PlanTestBase extends PredicateHelper { self: Suite =>
   protected def normalizePlan(plan: LogicalPlan): LogicalPlan = {
     plan transform {
       case Filter(condition: Expression, child: LogicalPlan) =>
-        Filter(splitConjunctivePredicates(condition).map(rewriteEqual).sortBy(_.hashCode())
+        Filter(splitConjunctivePredicates(condition).
+          map(rewriteEqualAndComparisons).sortBy(_.hashCode())
           .reduce(And), child)
       case sample: Sample =>
         sample.copy(seed = 0L)
       case Join(left, right, joinType, condition) if condition.isDefined =>
         val newCondition =
-          splitConjunctivePredicates(condition.get).map(rewriteEqual).sortBy(_.hashCode())
+          splitConjunctivePredicates(condition.get).map(rewriteEqualAndComparisons).
+            sortBy(_.hashCode())
             .reduce(And)
         Join(left, right, joinType, Some(newCondition))
     }
@@ -114,11 +115,12 @@ trait PlanTestBase extends PredicateHelper { self: Suite =>
    * 1. (a = b), (b = a);
    * 2. (a <=> b), (b <=> a).
    */
-  private def rewriteEqual(condition: Expression): Expression = condition match {
+  private def rewriteEqualAndComparisons(condition: Expression): Expression = condition match {
     case eq @ EqualTo(l: Expression, r: Expression) =>
       Seq(l, r).sortBy(_.hashCode()).reduce(EqualTo)
     case eq @ EqualNullSafe(l: Expression, r: Expression) =>
       Seq(l, r).sortBy(_.hashCode()).reduce(EqualNullSafe)
+    case br@BinaryComparison(lhs: Literal, rhs: Expression) => br.reverseOperands()
     case _ => condition // Don't reorder.
   }
 
@@ -179,7 +181,7 @@ trait PlanTestBase extends PredicateHelper { self: Suite =>
    * Sets all SQL configurations specified in `pairs`, calls `f`, and then restores all SQL
    * configurations.
    */
-  protected def withSQLConf(pairs: (String, String)*)(f: => Unit): Unit = {
+  protected def withSQLConf[T](pairs: (String, String)*)(f: => T): T = {
     val conf = SQLConf.get
     val (keys, values) = pairs.unzip
     val currentValues = keys.map { key =>

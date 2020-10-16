@@ -17,16 +17,18 @@
 
 package org.apache.spark.sql.catalyst.plans.logical
 
-import org.apache.spark.sql.catalyst.{AliasIdentifier}
+import org.apache.spark.sql.catalyst.AliasIdentifier
 import org.apache.spark.sql.catalyst.analysis.{MultiInstanceRelation, NamedRelation}
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable}
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.aggregate.AggregateExpression
 import org.apache.spark.sql.catalyst.plans._
 import org.apache.spark.sql.catalyst.plans.physical.{HashPartitioning, Partitioning, RangePartitioning, RoundRobinPartitioning}
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 import org.apache.spark.util.Utils
 import org.apache.spark.util.random.RandomSampler
+
 
 /**
  * When planning take() or collect() operations, this special node that is inserted at the top of
@@ -62,9 +64,8 @@ case class Project(projectList: Seq[NamedExpression], child: LogicalPlan)
 
     !expressions.exists(!_.resolved) && childrenResolved && !hasSpecialExpressions
   }
-
-  override def validConstraints: Set[Expression] =
-    child.constraints.union(getAliasedConstraints(projectList))
+  override def validConstraints: ExpressionSet = child.constraints.updateConstraints(this.output,
+      child.output, this.projectList, Option(getAliasedConstraints))
 }
 
 /**
@@ -131,7 +132,7 @@ case class Filter(condition: Expression, child: LogicalPlan)
 
   override def maxRows: Option[Long] = child.maxRows
 
-  override protected def validConstraints: Set[Expression] = {
+  override protected def validConstraints: ExpressionSet = {
     val predicates = splitConjunctivePredicates(condition)
       .filterNot(SubqueryExpression.hasCorrelatedSubquery)
     child.constraints.union(predicates.toSet)
@@ -142,14 +143,12 @@ abstract class SetOperation(left: LogicalPlan, right: LogicalPlan) extends Binar
 
   def duplicateResolved: Boolean = left.outputSet.intersect(right.outputSet).isEmpty
 
-  protected def leftConstraints: Set[Expression] = left.constraints
+  protected def leftConstraints: ExpressionSet = left.constraints
 
-  protected def rightConstraints: Set[Expression] = {
+  protected def rightConstraints: ExpressionSet = {
     require(left.output.size == right.output.size)
     val attributeRewrites = AttributeMap(right.output.zip(left.output))
-    right.constraints.map(_ transform {
-      case a: Attribute => attributeRewrites(a)
-    })
+    right.constraints.attributesRewrite(attributeRewrites)
   }
 
   override lazy val resolved: Boolean =
@@ -176,8 +175,7 @@ case class Intersect(
       leftAttr.withNullability(leftAttr.nullable && rightAttr.nullable)
     }
 
-  override protected def validConstraints: Set[Expression] =
-    leftConstraints.union(rightConstraints)
+  override protected def validConstraints: ExpressionSet = leftConstraints.union(rightConstraints)
 
   override def maxRows: Option[Long] = {
     if (children.exists(_.maxRows.isEmpty)) {
@@ -196,7 +194,7 @@ case class Except(
   /** We don't use right.output because those rows get excluded from the set. */
   override def output: Seq[Attribute] = left.output
 
-  override protected def validConstraints: Set[Expression] = leftConstraints
+  override protected def validConstraints: ExpressionSet = leftConstraints
 }
 
 /** Factory for constructing new `Union` nodes. */
@@ -265,12 +263,10 @@ case class Union(children: Seq[LogicalPlan]) extends LogicalPlan {
   private def rewriteConstraints(
       reference: Seq[Attribute],
       original: Seq[Attribute],
-      constraints: Set[Expression]): Set[Expression] = {
+      constraints: ExpressionSet): Set[Expression] = {
     require(reference.size == original.size)
     val attributeRewrites = AttributeMap(original.zip(reference))
-    constraints.map(_ transform {
-      case a: Attribute => attributeRewrites(a)
-    })
+    constraints.attributesRewrite(attributeRewrites)
   }
 
   private def merge(a: Set[Expression], b: Set[Expression]): Set[Expression] = {
@@ -287,10 +283,11 @@ case class Union(children: Seq[LogicalPlan]) extends LogicalPlan {
     common ++ others
   }
 
-  override protected def validConstraints: Set[Expression] = {
-    children
+  override protected def validConstraints: ExpressionSet = {
+    val unionConstraints = children
       .map(child => rewriteConstraints(children.head.output, child.output, child.constraints))
       .reduce(merge(_, _))
+    children.head.constraints.withNewConstraints(unionConstraints)
   }
 }
 
@@ -318,7 +315,7 @@ case class Join(
     }
   }
 
-  override protected def validConstraints: Set[Expression] = {
+  override protected def validConstraints: ExpressionSet =
     joinType match {
       case _: InnerLike if condition.isDefined =>
         left.constraints
@@ -337,10 +334,10 @@ case class Join(
         left.constraints
       case RightOuter =>
         right.constraints
-      case FullOuter =>
-        Set.empty[Expression]
+      case FullOuter => if (SQLConf.get.useOptimizedConstraintPropagation) {
+        new ConstraintSet()
+      } else ExpressionSet(Set.empty[Expression])
     }
-  }
 
   def duplicateResolved: Boolean = left.outputSet.intersect(right.outputSet).isEmpty
 
@@ -606,9 +603,10 @@ case class Aggregate(
   override def output: Seq[Attribute] = aggregateExpressions.map(_.toAttribute)
   override def maxRows: Option[Long] = child.maxRows
 
-  override def validConstraints: Set[Expression] = {
+  override def validConstraints: ExpressionSet = {
     val nonAgg = aggregateExpressions.filter(_.find(_.isInstanceOf[AggregateExpression]).isEmpty)
-    child.constraints.union(getAliasedConstraints(nonAgg))
+    child.constraints.updateConstraints(this.output,
+      child.output, nonAgg, Option(getAliasedConstraints))
   }
 }
 
@@ -729,7 +727,9 @@ case class Expand(
 
   // This operator can reuse attributes (for example making them null when doing a roll up) so
   // the constraints of the child may no longer be valid.
-  override protected def validConstraints: Set[Expression] = Set.empty[Expression]
+  override protected def validConstraints: ExpressionSet =
+    if (SQLConf.get.useOptimizedConstraintPropagation) new ConstraintSet()
+    else ExpressionSet(Set.empty)
 }
 
 /**
