@@ -34,6 +34,7 @@ import org.apache.spark.sql.execution.datasources.jdbc.{JDBCOptions, JdbcUtils}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.test.SharedSparkSession
 import org.apache.spark.sql.types._
+import org.apache.spark.util.ArrayImplicits._
 import org.apache.spark.util.Utils
 
 class JDBCWriteSuite extends SharedSparkSession with BeforeAndAfter {
@@ -92,13 +93,15 @@ class JDBCWriteSuite extends SharedSparkSession with BeforeAndAfter {
     conn1.close()
   }
 
-  private lazy val arr2x2 = Array[Row](Row.apply("dave", 42), Row.apply("mary", 222))
-  private lazy val arr1x2 = Array[Row](Row.apply("fred", 3))
+  private lazy val arr2x2 =
+    Array[Row](Row.apply("dave", 42), Row.apply("mary", 222)).toImmutableArraySeq
+  private lazy val arr1x2 = Array[Row](Row.apply("fred", 3)).toImmutableArraySeq
   private lazy val schema2 = StructType(
       StructField("name", StringType) ::
       StructField("id", IntegerType) :: Nil)
 
-  private lazy val arr2x3 = Array[Row](Row.apply("dave", 42, 1), Row.apply("mary", 222, 2))
+  private lazy val arr2x3 =
+    Array[Row](Row.apply("dave", 42, 1), Row.apply("mary", 222, 2)).toImmutableArraySeq
   private lazy val schema3 = StructType(
       StructField("name", StringType) ::
       StructField("id", IntegerType) ::
@@ -203,7 +206,7 @@ class JDBCWriteSuite extends SharedSparkSession with BeforeAndAfter {
   }
 
   test("Truncate") {
-    JdbcDialects.unregisterDialect(H2Dialect)
+    JdbcDialects.unregisterDialect(H2Dialect())
     try {
       JdbcDialects.registerDialect(testH2Dialect)
       val df = spark.createDataFrame(sparkContext.parallelize(arr2x2), schema2)
@@ -228,7 +231,7 @@ class JDBCWriteSuite extends SharedSparkSession with BeforeAndAfter {
             "Some(StructType(StructField(name,StringType,true),StructField(id,IntegerType,true)))"))
     } finally {
       JdbcDialects.unregisterDialect(testH2Dialect)
-      JdbcDialects.registerDialect(H2Dialect)
+      JdbcDialects.registerDialect(H2Dialect())
     }
   }
 
@@ -414,7 +417,7 @@ class JDBCWriteSuite extends SharedSparkSession with BeforeAndAfter {
 
       assert(JdbcUtils.schemaString(
         schema,
-        spark.sqlContext.conf.caseSensitiveAnalysis,
+        spark.sessionState.conf.caseSensitiveAnalysis,
         url1,
         Option(createTableColTypes)) == expectedSchemaStr)
     }

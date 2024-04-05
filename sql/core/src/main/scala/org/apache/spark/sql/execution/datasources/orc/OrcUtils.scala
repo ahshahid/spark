@@ -44,6 +44,7 @@ import org.apache.spark.sql.execution.datasources.{AggregatePushDownUtils, Schem
 import org.apache.spark.sql.execution.datasources.v2.V2ColumnUtils
 import org.apache.spark.sql.types._
 import org.apache.spark.util.{ThreadUtils, Utils}
+import org.apache.spark.util.ArrayImplicits._
 
 object OrcUtils extends Logging {
 
@@ -54,7 +55,8 @@ object OrcUtils extends Logging {
     OrcCompressionCodec.ZLIB.name() -> ".zlib",
     OrcCompressionCodec.ZSTD.name() -> ".zstd",
     OrcCompressionCodec.LZ4.name() -> ".lz4",
-    OrcCompressionCodec.LZO.name() -> ".lzo")
+    OrcCompressionCodec.LZO.name() -> ".lzo",
+    OrcCompressionCodec.BROTLI.name() -> ".brotli")
 
   val CATALYST_TYPE_ATTRIBUTE_NAME = "spark.sql.catalyst.type"
 
@@ -303,6 +305,10 @@ object OrcUtils extends Logging {
           val typeDesc = new TypeDescription(TypeDescription.Category.TIMESTAMP)
           typeDesc.setAttribute(CATALYST_TYPE_ATTRIBUTE_NAME, t.typeName)
           Some(typeDesc)
+        case _: StringType =>
+          val typeDesc = new TypeDescription(TypeDescription.Category.STRING)
+          typeDesc.setAttribute(CATALYST_TYPE_ATTRIBUTE_NAME, StringType.typeName)
+          Some(typeDesc)
         case _ => None
       }
     }
@@ -502,7 +508,7 @@ object OrcUtils extends Logging {
         case (x, _) =>
           throw new IllegalArgumentException(
             s"createAggInternalRowFromFooter should not take $x as the aggregate expression")
-      }
+      }.toImmutableArraySeq
 
     val orcValuesDeserializer = new OrcDeserializer(schemaWithoutGroupBy,
       (0 until schemaWithoutGroupBy.length).toArray)

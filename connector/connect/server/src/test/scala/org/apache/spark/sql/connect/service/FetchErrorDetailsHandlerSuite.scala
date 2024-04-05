@@ -75,7 +75,7 @@ class FetchErrorDetailsHandlerSuite extends SharedSparkSession with ResourceHelp
       val errorId = UUID.randomUUID().toString()
 
       val sessionHolder = SparkConnectService
-        .getOrCreateIsolatedSession(userId, sessionId)
+        .getOrCreateIsolatedSession(userId, sessionId, None)
 
       sessionHolder.errorIdToError.put(errorId, testError)
 
@@ -103,15 +103,11 @@ class FetchErrorDetailsHandlerSuite extends SharedSparkSession with ResourceHelp
         assert(response.getErrors(1).getErrorTypeHierarchy(1) == classOf[Throwable].getName)
         assert(response.getErrors(1).getErrorTypeHierarchy(2) == classOf[Object].getName)
         assert(!response.getErrors(1).hasCauseIdx)
-        if (serverStacktraceEnabled) {
-          assert(response.getErrors(0).getStackTraceCount == testError.getStackTrace.length)
-          assert(
-            response.getErrors(1).getStackTraceCount ==
-              testError.getCause.getStackTrace.length)
-        } else {
-          assert(response.getErrors(0).getStackTraceCount == 0)
-          assert(response.getErrors(1).getStackTraceCount == 0)
-        }
+        assert(response.getErrors(0).getStackTraceCount == testError.getStackTrace.length)
+        assert(
+          response.getErrors(1).getStackTraceCount ==
+            testError.getCause.getStackTrace.length)
+
       } finally {
         sessionHolder.session.conf.unset(Connect.CONNECT_SERVER_STACKTRACE_ENABLED.key)
         sessionHolder.session.conf.unset(SQLConf.PYSPARK_JVM_STACKTRACE_ENABLED.key)
@@ -129,7 +125,7 @@ class FetchErrorDetailsHandlerSuite extends SharedSparkSession with ResourceHelp
     val errorId = UUID.randomUUID().toString()
 
     SparkConnectService
-      .getOrCreateIsolatedSession(userId, sessionId)
+      .getOrCreateIsolatedSession(userId, sessionId, None)
       .errorIdToError
       .put(errorId, testError)
 
@@ -142,7 +138,7 @@ class FetchErrorDetailsHandlerSuite extends SharedSparkSession with ResourceHelp
 
     assert(
       SparkConnectService
-        .getOrCreateIsolatedSession(userId, sessionId)
+        .getOrCreateIsolatedSession(userId, sessionId, None)
         .errorIdToError
         .size() == 0)
   }
@@ -153,7 +149,7 @@ class FetchErrorDetailsHandlerSuite extends SharedSparkSession with ResourceHelp
       val errorId = UUID.randomUUID().toString()
 
       SparkConnectService
-        .getOrCreateIsolatedSession(userId, sessionId)
+        .getOrCreateIsolatedSession(userId, sessionId, None)
         .errorIdToError
         .put(errorId, testError)
 
@@ -179,7 +175,7 @@ class FetchErrorDetailsHandlerSuite extends SharedSparkSession with ResourceHelp
     val errorId = UUID.randomUUID().toString()
 
     SparkConnectService
-      .getOrCreateIsolatedSession(userId, sessionId)
+      .getOrCreateIsolatedSession(userId, sessionId, None)
       .errorIdToError
       .put(errorId, testError)
 
@@ -196,7 +192,7 @@ class FetchErrorDetailsHandlerSuite extends SharedSparkSession with ResourceHelp
     val errorId = UUID.randomUUID().toString()
 
     SparkConnectService
-      .getOrCreateIsolatedSession(userId, sessionId)
+      .getOrCreateIsolatedSession(userId, sessionId, None)
       .errorIdToError
       .put(errorId, testError)
 

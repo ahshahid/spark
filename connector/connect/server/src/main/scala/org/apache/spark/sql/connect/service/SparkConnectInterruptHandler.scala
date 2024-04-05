@@ -28,9 +28,13 @@ class SparkConnectInterruptHandler(responseObserver: StreamObserver[proto.Interr
     extends Logging {
 
   def handle(v: proto.InterruptRequest): Unit = {
+    val previousSessionId = v.hasClientObservedServerSideSessionId match {
+      case true => Some(v.getClientObservedServerSideSessionId)
+      case false => None
+    }
     val sessionHolder =
       SparkConnectService
-        .getOrCreateIsolatedSession(v.getUserContext.getUserId, v.getSessionId)
+        .getOrCreateIsolatedSession(v.getUserContext.getUserId, v.getSessionId, previousSessionId)
 
     val interruptedIds = v.getInterruptType match {
       case proto.InterruptRequest.InterruptType.INTERRUPT_TYPE_ALL =>
@@ -54,6 +58,7 @@ class SparkConnectInterruptHandler(responseObserver: StreamObserver[proto.Interr
     val response = proto.InterruptResponse
       .newBuilder()
       .setSessionId(v.getSessionId)
+      .setServerSideSessionId(sessionHolder.serverSessionId)
       .addAllInterruptedIds(interruptedIds.asJava)
       .build()
 

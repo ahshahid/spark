@@ -30,12 +30,15 @@ import com.esotericsoftware.kryo.KryoSerializable;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 
+import com.ibm.icu.text.StringSearch;
+import org.apache.spark.sql.catalyst.util.CollationFactory;
 import org.apache.spark.unsafe.Platform;
 import org.apache.spark.unsafe.UTF8StringBuilder;
 import org.apache.spark.unsafe.array.ByteArrayMethods;
 import org.apache.spark.unsafe.hash.Murmur3_x86_32;
 
 import static org.apache.spark.unsafe.Platform.*;
+import org.apache.spark.util.SparkEnvUtils$;
 
 
 /**
@@ -148,6 +151,14 @@ public final class UTF8String implements Comparable<UTF8String>, Externalizable,
     return fromBytes(spaces);
   }
 
+  /**
+   * Determines if the specified character (Unicode code point) is white space or an ISO control
+   * character according to Java.
+   */
+  public static boolean isWhitespaceOrISOControl(int codePoint) {
+    return Character.isWhitespace(codePoint) || Character.isISOControl(codePoint);
+  }
+
   private UTF8String(Object base, long offset, int numBytes) {
     this.base = base;
     this.offset = offset;
@@ -250,9 +261,9 @@ public final class UTF8String implements Comparable<UTF8String>, Externalizable,
    */
   public byte[] getBytes() {
     // avoid copy if `base` is `byte[]`
-    if (offset == BYTE_ARRAY_OFFSET && base instanceof byte[]
-      && ((byte[]) base).length == numBytes) {
-      return (byte[]) base;
+    if (offset == BYTE_ARRAY_OFFSET && base instanceof byte[] bytes
+      && bytes.length == numBytes) {
+      return bytes;
     } else {
       byte[] bytes = new byte[numBytes];
       copyMemory(base, offset, bytes, BYTE_ARRAY_OFFSET, numBytes);
@@ -331,6 +342,28 @@ public final class UTF8String implements Comparable<UTF8String>, Externalizable,
     return false;
   }
 
+  public boolean contains(final UTF8String substring, int collationId) {
+    if (CollationFactory.fetchCollation(collationId).supportsBinaryEquality) {
+      return this.contains(substring);
+    }
+    if (collationId == CollationFactory.UTF8_BINARY_LCASE_COLLATION_ID) {
+      return this.toLowerCase().contains(substring.toLowerCase());
+    }
+    return collatedContains(substring, collationId);
+  }
+
+  private boolean collatedContains(final UTF8String substring, int collationId) {
+    if (substring.numBytes == 0) return true;
+    if (this.numBytes == 0) return false;
+    StringSearch stringSearch = CollationFactory.getStringSearch(this, substring, collationId);
+    while (stringSearch.next() != StringSearch.DONE) {
+      if (stringSearch.getMatchLength() == stringSearch.getPattern().length()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /**
    * Returns the byte at position `i`.
    */
@@ -345,12 +378,43 @@ public final class UTF8String implements Comparable<UTF8String>, Externalizable,
     return ByteArrayMethods.arrayEquals(base, offset + pos, s.base, s.offset, s.numBytes);
   }
 
+  private boolean matchAt(final UTF8String s, int pos, int collationId) {
+    if (s.numChars() + pos > this.numChars() || pos < 0) {
+      return false;
+    }
+    if (s.numBytes == 0 || this.numBytes == 0) {
+      return s.numBytes == 0;
+    }
+    return CollationFactory.getStringSearch(this.substring(pos, pos + s.numChars()),
+      s, collationId).last() == 0;
+  }
+
   public boolean startsWith(final UTF8String prefix) {
     return matchAt(prefix, 0);
   }
 
+  public boolean startsWith(final UTF8String prefix, int collationId) {
+    if (CollationFactory.fetchCollation(collationId).supportsBinaryEquality) {
+      return this.startsWith(prefix);
+    }
+    if (collationId == CollationFactory.UTF8_BINARY_LCASE_COLLATION_ID) {
+      return this.toLowerCase().startsWith(prefix.toLowerCase());
+    }
+    return matchAt(prefix, 0, collationId);
+  }
+
   public boolean endsWith(final UTF8String suffix) {
     return matchAt(suffix, numBytes - suffix.numBytes);
+  }
+
+  public boolean endsWith(final UTF8String suffix, int collationId) {
+    if (CollationFactory.fetchCollation(collationId).supportsBinaryEquality) {
+      return this.endsWith(suffix);
+    }
+    if (collationId == CollationFactory.UTF8_BINARY_LCASE_COLLATION_ID) {
+      return this.toLowerCase().endsWith(suffix.toLowerCase());
+    }
+    return matchAt(suffix, numBytes - suffix.numBytes, collationId);
   }
 
   /**
@@ -496,14 +560,6 @@ public final class UTF8String implements Comparable<UTF8String>, Externalizable,
     byte[] newBytes = new byte[len];
     copyMemory(base, offset + start, newBytes, BYTE_ARRAY_OFFSET, len);
     return UTF8String.fromBytes(newBytes);
-  }
-
-  /**
-   * Determines if the specified character (Unicode code point) is white space or an ISO control
-   * character according to Java.
-   */
-  private boolean isWhitespaceOrISOControl(int codePoint) {
-    return Character.isWhitespace(codePoint) || Character.isISOControl(codePoint);
   }
 
   /**
@@ -1388,26 +1444,69 @@ public final class UTF8String implements Comparable<UTF8String>, Externalizable,
     return fromBytes(bytes);
   }
 
+  /**
+   * Implementation of Comparable interface. This method is kept for backwards compatibility.
+   * It should not be used in spark code base, given that string comparison requires passing
+   * collation id. Either explicitly use `binaryCompare` or use `semanticCompare`.
+   */
   @Override
   public int compareTo(@Nonnull final UTF8String other) {
+    if (SparkEnvUtils$.MODULE$.isTesting()) {
+      throw new UnsupportedOperationException(
+        "compareTo should not be used in spark code base. Use binaryCompare or semanticCompare.");
+    } else {
+      return binaryCompare(other);
+    }
+  }
+
+  /**
+   * Binary comparison of two UTF8String. Can only be used for default UTF8_BINARY collation.
+   */
+  public int binaryCompare(final UTF8String other) {
     return ByteArray.compareBinary(
-        base, offset, numBytes, other.base, other.offset, other.numBytes);
+      base, offset, numBytes, other.base, other.offset, other.numBytes);
   }
 
-  public int compare(final UTF8String other) {
-    return compareTo(other);
+  /**
+   * Collation-aware comparison of two UTF8String. The collation to use is specified by the
+   * `collationId` parameter.
+   */
+  public int semanticCompare(final UTF8String other, int collationId) {
+    return CollationFactory.fetchCollation(collationId).comparator.compare(this, other);
   }
 
+  /**
+   * Binary equality check of two UTF8String. Note that binary equality is not the same as
+   * equality under given collation. E.g. if string is collated in case-insensitive two strings
+   * are considered equal even if they are different in binary comparison.
+   */
   @Override
   public boolean equals(final Object other) {
     if (other instanceof UTF8String o) {
-      if (numBytes != o.numBytes) {
-        return false;
-      }
-      return ByteArrayMethods.arrayEquals(base, offset, o.base, o.offset, numBytes);
+      return binaryEquals(o);
     } else {
       return false;
     }
+  }
+
+  /**
+   * Binary equality check of two UTF8String. Note that binary equality is not the same as
+   * equality under given collation. E.g. if string is collated in case-insensitive two strings
+   * are considered equal even if they are different in binary comparison.
+   */
+  public boolean binaryEquals(final UTF8String other) {
+    if (numBytes != other.numBytes) {
+      return false;
+    }
+
+    return ByteArrayMethods.arrayEquals(base, offset, other.base, other.offset, numBytes);
+  }
+
+  /**
+   * Collation-aware equality comparison of two UTF8String.
+   */
+  public boolean semanticEquals(final UTF8String other, int collationId) {
+    return CollationFactory.fetchCollation(collationId).equalsFunction.apply(this, other);
   }
 
   /**

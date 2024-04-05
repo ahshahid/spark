@@ -21,7 +21,6 @@ import java.net.URI
 import java.util.concurrent.TimeUnit._
 import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
 
-import scala.collection.immutable
 import scala.jdk.CollectionConverters._
 import scala.reflect.runtime.universe.TypeTag
 
@@ -45,6 +44,7 @@ import org.apache.spark.sql.internal.{CatalogImpl, SqlApiConf}
 import org.apache.spark.sql.streaming.DataStreamReader
 import org.apache.spark.sql.streaming.StreamingQueryManager
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.util.ArrayImplicits._
 
 /**
  * The entry point to programming Spark with the Dataset and DataFrame API.
@@ -248,17 +248,20 @@ class SparkSession private[sql] (
         proto.SqlCommand
           .newBuilder()
           .setSql(sqlText)
-          .addAllPosArguments(immutable.ArraySeq.unsafeWrapArray(args.map(lit(_).expr)).asJava)))
+          .addAllPosArguments(args.map(lit(_).expr).toImmutableArraySeq.asJava)))
     val plan = proto.Plan.newBuilder().setCommand(cmd)
-    // .toBuffer forces that the iterator is consumed and closed
-    val responseSeq = client.execute(plan.build()).toBuffer.toSeq
+    val responseIter = client.execute(plan.build())
 
-    val response = responseSeq
-      .find(_.hasSqlCommandResult)
-      .getOrElse(throw new RuntimeException("SQLCommandResult must be present"))
-
-    // Update the builder with the values from the result.
-    builder.mergeFrom(response.getSqlCommandResult.getRelation)
+    try {
+      val response = responseIter
+        .find(_.hasSqlCommandResult)
+        .getOrElse(throw new RuntimeException("SQLCommandResult must be present"))
+      // Update the builder with the values from the result.
+      builder.mergeFrom(response.getSqlCommandResult.getRelation)
+    } finally {
+      // consume the rest of the iterator
+      responseIter.foreach(_ => ())
+    }
   }
 
   /**
@@ -307,17 +310,20 @@ class SparkSession private[sql] (
           proto.SqlCommand
             .newBuilder()
             .setSql(sqlText)
-            .putAllNamedArguments(args.asScala.view.mapValues(lit(_).expr).toMap.asJava)))
+            .putAllNamedArguments(args.asScala.map { case (k, v) => (k, lit(v).expr) }.asJava)))
       val plan = proto.Plan.newBuilder().setCommand(cmd)
-      // .toBuffer forces that the iterator is consumed and closed
-      val responseSeq = client.execute(plan.build()).toBuffer.toSeq
+      val responseIter = client.execute(plan.build())
 
-      val response = responseSeq
-        .find(_.hasSqlCommandResult)
-        .getOrElse(throw new RuntimeException("SQLCommandResult must be present"))
-
-      // Update the builder with the values from the result.
-      builder.mergeFrom(response.getSqlCommandResult.getRelation)
+      try {
+        val response = responseIter
+          .find(_.hasSqlCommandResult)
+          .getOrElse(throw new RuntimeException("SQLCommandResult must be present"))
+        // Update the builder with the values from the result.
+        builder.mergeFrom(response.getSqlCommandResult.getRelation)
+      } finally {
+        // consume the rest of the iterator
+        responseIter.foreach(_ => ())
+      }
   }
 
   /**
@@ -490,15 +496,27 @@ class SparkSession private[sql] (
   }
 
   @DeveloperApi
+  @deprecated("Use newDataFrame(Array[Byte]) instead", "4.0.0")
   def newDataFrame(extension: com.google.protobuf.Any): DataFrame = {
-    newDataset(extension, UnboundRowEncoder)
+    newDataFrame(_.setExtension(extension))
   }
 
   @DeveloperApi
+  @deprecated("Use newDataFrame(Array[Byte], AgnosticEncoder[T]) instead", "4.0.0")
   def newDataset[T](
       extension: com.google.protobuf.Any,
       encoder: AgnosticEncoder[T]): Dataset[T] = {
     newDataset(encoder)(_.setExtension(extension))
+  }
+
+  @DeveloperApi
+  def newDataFrame(extension: Array[Byte]): DataFrame = {
+    newDataFrame(_.setExtension(com.google.protobuf.Any.parseFrom(extension)))
+  }
+
+  @DeveloperApi
+  def newDataset[T](extension: Array[Byte], encoder: AgnosticEncoder[T]): Dataset[T] = {
+    newDataset(encoder)(_.setExtension(com.google.protobuf.Any.parseFrom(extension)))
   }
 
   private[sql] def newCommand[T](f: proto.Command.Builder => Unit): proto.Command = {
@@ -543,14 +561,14 @@ class SparkSession private[sql] (
     f(builder)
     builder.getCommonBuilder.setPlanId(planIdGenerator.getAndIncrement())
     val plan = proto.Plan.newBuilder().setRoot(builder).build()
-    // .toBuffer forces that the iterator is consumed and closed
-    client.execute(plan).toBuffer
+    // .foreach forces that the iterator is consumed and closed
+    client.execute(plan).foreach(_ => ())
   }
 
   private[sql] def execute(command: proto.Command): Seq[ExecutePlanResponse] = {
     val plan = proto.Plan.newBuilder().setCommand(command).build()
-    // .toBuffer forces that the iterator is consumed and closed
-    client.execute(plan).toBuffer.toSeq
+    // .toSeq forces that the iterator is consumed and closed
+    client.execute(plan).toSeq
   }
 
   private[sql] def registerUdf(udf: proto.CommonInlineUserDefinedFunction): Unit = {
@@ -559,8 +577,18 @@ class SparkSession private[sql] (
   }
 
   @DeveloperApi
+  @deprecated("Use execute(Array[Byte]) instead", "4.0.0")
   def execute(extension: com.google.protobuf.Any): Unit = {
     val command = proto.Command.newBuilder().setExtension(extension).build()
+    execute(command)
+  }
+
+  @DeveloperApi
+  def execute(extension: Array[Byte]): Unit = {
+    val command = proto.Command
+      .newBuilder()
+      .setExtension(com.google.protobuf.Any.parseFrom(extension))
+      .build()
     execute(command)
   }
 
@@ -583,6 +611,47 @@ class SparkSession private[sql] (
    */
   @Experimental
   def addArtifact(uri: URI): Unit = client.addArtifact(uri)
+
+  /**
+   * Add a single in-memory artifact to the session while preserving the directory structure
+   * specified by `target` under the session's working directory of that particular file
+   * extension.
+   *
+   * Supported target file extensions are .jar and .class.
+   *
+   * ==Example==
+   * {{{
+   *  addArtifact(bytesBar, "foo/bar.class")
+   *  addArtifact(bytesFlat, "flat.class")
+   *  // Directory structure of the session's working directory for class files would look like:
+   *  // ${WORKING_DIR_FOR_CLASS_FILES}/flat.class
+   *  // ${WORKING_DIR_FOR_CLASS_FILES}/foo/bar.class
+   * }}}
+   *
+   * @since 4.0.0
+   */
+  @Experimental
+  def addArtifact(bytes: Array[Byte], target: String): Unit = client.addArtifact(bytes, target)
+
+  /**
+   * Add a single artifact to the session while preserving the directory structure specified by
+   * `target` under the session's working directory of that particular file extension.
+   *
+   * Supported target file extensions are .jar and .class.
+   *
+   * ==Example==
+   * {{{
+   *  addArtifact("/Users/dummyUser/files/foo/bar.class", "foo/bar.class")
+   *  addArtifact("/Users/dummyUser/files/flat.class", "flat.class")
+   *  // Directory structure of the session's working directory for class files would look like:
+   *  // ${WORKING_DIR_FOR_CLASS_FILES}/flat.class
+   *  // ${WORKING_DIR_FOR_CLASS_FILES}/foo/bar.class
+   * }}}
+   *
+   * @since 4.0.0
+   */
+  @Experimental
+  def addArtifact(source: String, target: String): Unit = client.addArtifact(source, target)
 
   /**
    * Add one or more artifacts to the session.
@@ -665,6 +734,9 @@ class SparkSession private[sql] (
    * @since 3.4.0
    */
   override def close(): Unit = {
+    if (releaseSessionOnClose) {
+      client.releaseSession()
+    }
     client.shutdown()
     allocator.close()
     SparkSession.onSessionClose(this)
@@ -735,6 +807,11 @@ class SparkSession private[sql] (
    * We null out the instance for now.
    */
   private def writeReplace(): Any = null
+
+  /**
+   * Set to false to prevent client.releaseSession on close() (testing only)
+   */
+  private[sql] var releaseSessionOnClose = true
 }
 
 // The minimal builder needed to create a spark session.

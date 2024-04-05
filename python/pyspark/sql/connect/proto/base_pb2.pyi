@@ -478,6 +478,7 @@ class AnalyzePlanRequest(google.protobuf.message.Message):
         ) -> None: ...
 
     SESSION_ID_FIELD_NUMBER: builtins.int
+    CLIENT_OBSERVED_SERVER_SIDE_SESSION_ID_FIELD_NUMBER: builtins.int
     USER_CONTEXT_FIELD_NUMBER: builtins.int
     CLIENT_TYPE_FIELD_NUMBER: builtins.int
     SCHEMA_FIELD_NUMBER: builtins.int
@@ -500,6 +501,12 @@ class AnalyzePlanRequest(google.protobuf.message.Message):
     by user_context.user_id). The session_id is set by the client to be able to
     collate streaming responses from different queries within the dedicated session.
     The id should be an UUID string of the format `00112233-4455-6677-8899-aabbccddeeff`
+    """
+    client_observed_server_side_session_id: builtins.str
+    """(Optional)
+
+    Server-side generated idempotency key from the previous responses (if any). Server
+    can use this to validate that the server side session has not changed.
     """
     @property
     def user_context(self) -> global___UserContext:
@@ -539,6 +546,7 @@ class AnalyzePlanRequest(google.protobuf.message.Message):
         self,
         *,
         session_id: builtins.str = ...,
+        client_observed_server_side_session_id: builtins.str | None = ...,
         user_context: global___UserContext | None = ...,
         client_type: builtins.str | None = ...,
         schema: global___AnalyzePlanRequest.Schema | None = ...,
@@ -558,10 +566,14 @@ class AnalyzePlanRequest(google.protobuf.message.Message):
     def HasField(
         self,
         field_name: typing_extensions.Literal[
+            "_client_observed_server_side_session_id",
+            b"_client_observed_server_side_session_id",
             "_client_type",
             b"_client_type",
             "analyze",
             b"analyze",
+            "client_observed_server_side_session_id",
+            b"client_observed_server_side_session_id",
             "client_type",
             b"client_type",
             "ddl_parse",
@@ -597,10 +609,14 @@ class AnalyzePlanRequest(google.protobuf.message.Message):
     def ClearField(
         self,
         field_name: typing_extensions.Literal[
+            "_client_observed_server_side_session_id",
+            b"_client_observed_server_side_session_id",
             "_client_type",
             b"_client_type",
             "analyze",
             b"analyze",
+            "client_observed_server_side_session_id",
+            b"client_observed_server_side_session_id",
             "client_type",
             b"client_type",
             "ddl_parse",
@@ -637,6 +653,13 @@ class AnalyzePlanRequest(google.protobuf.message.Message):
     ) -> None: ...
     @typing.overload
     def WhichOneof(
+        self,
+        oneof_group: typing_extensions.Literal[
+            "_client_observed_server_side_session_id", b"_client_observed_server_side_session_id"
+        ],
+    ) -> typing_extensions.Literal["client_observed_server_side_session_id"] | None: ...
+    @typing.overload
+    def WhichOneof(
         self, oneof_group: typing_extensions.Literal["_client_type", b"_client_type"]
     ) -> typing_extensions.Literal["client_type"] | None: ...
     @typing.overload
@@ -666,6 +689,7 @@ global___AnalyzePlanRequest = AnalyzePlanRequest
 class AnalyzePlanResponse(google.protobuf.message.Message):
     """Response to performing analysis of the query. Contains relevant metadata to be able to
     reason about the performance.
+    Next ID: 16
     """
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
@@ -854,6 +878,7 @@ class AnalyzePlanResponse(google.protobuf.message.Message):
         ) -> None: ...
 
     SESSION_ID_FIELD_NUMBER: builtins.int
+    SERVER_SIDE_SESSION_ID_FIELD_NUMBER: builtins.int
     SCHEMA_FIELD_NUMBER: builtins.int
     EXPLAIN_FIELD_NUMBER: builtins.int
     TREE_STRING_FIELD_NUMBER: builtins.int
@@ -868,6 +893,10 @@ class AnalyzePlanResponse(google.protobuf.message.Message):
     UNPERSIST_FIELD_NUMBER: builtins.int
     GET_STORAGE_LEVEL_FIELD_NUMBER: builtins.int
     session_id: builtins.str
+    server_side_session_id: builtins.str
+    """Server-side generated idempotency key that the client can use to assert that the server side
+    session has not changed.
+    """
     @property
     def schema(self) -> global___AnalyzePlanResponse.Schema: ...
     @property
@@ -898,6 +927,7 @@ class AnalyzePlanResponse(google.protobuf.message.Message):
         self,
         *,
         session_id: builtins.str = ...,
+        server_side_session_id: builtins.str = ...,
         schema: global___AnalyzePlanResponse.Schema | None = ...,
         explain: global___AnalyzePlanResponse.Explain | None = ...,
         tree_string: global___AnalyzePlanResponse.TreeString | None = ...,
@@ -970,6 +1000,8 @@ class AnalyzePlanResponse(google.protobuf.message.Message):
             b"schema",
             "semantic_hash",
             b"semantic_hash",
+            "server_side_session_id",
+            b"server_side_session_id",
             "session_id",
             b"session_id",
             "spark_version",
@@ -1051,6 +1083,7 @@ class ExecutePlanRequest(google.protobuf.message.Message):
         ) -> typing_extensions.Literal["reattach_options", "extension"] | None: ...
 
     SESSION_ID_FIELD_NUMBER: builtins.int
+    CLIENT_OBSERVED_SERVER_SIDE_SESSION_ID_FIELD_NUMBER: builtins.int
     USER_CONTEXT_FIELD_NUMBER: builtins.int
     OPERATION_ID_FIELD_NUMBER: builtins.int
     PLAN_FIELD_NUMBER: builtins.int
@@ -1064,6 +1097,12 @@ class ExecutePlanRequest(google.protobuf.message.Message):
     by user_context.user_id). The session_id is set by the client to be able to
     collate streaming responses from different queries within the dedicated session.
     The id should be an UUID string of the format `00112233-4455-6677-8899-aabbccddeeff`
+    """
+    client_observed_server_side_session_id: builtins.str
+    """(Optional)
+
+    Server-side generated idempotency key from the previous responses (if any). Server
+    can use this to validate that the server side session has not changed.
     """
     @property
     def user_context(self) -> global___UserContext:
@@ -1107,6 +1146,7 @@ class ExecutePlanRequest(google.protobuf.message.Message):
         self,
         *,
         session_id: builtins.str = ...,
+        client_observed_server_side_session_id: builtins.str | None = ...,
         user_context: global___UserContext | None = ...,
         operation_id: builtins.str | None = ...,
         plan: global___Plan | None = ...,
@@ -1118,10 +1158,14 @@ class ExecutePlanRequest(google.protobuf.message.Message):
     def HasField(
         self,
         field_name: typing_extensions.Literal[
+            "_client_observed_server_side_session_id",
+            b"_client_observed_server_side_session_id",
             "_client_type",
             b"_client_type",
             "_operation_id",
             b"_operation_id",
+            "client_observed_server_side_session_id",
+            b"client_observed_server_side_session_id",
             "client_type",
             b"client_type",
             "operation_id",
@@ -1135,10 +1179,14 @@ class ExecutePlanRequest(google.protobuf.message.Message):
     def ClearField(
         self,
         field_name: typing_extensions.Literal[
+            "_client_observed_server_side_session_id",
+            b"_client_observed_server_side_session_id",
             "_client_type",
             b"_client_type",
             "_operation_id",
             b"_operation_id",
+            "client_observed_server_side_session_id",
+            b"client_observed_server_side_session_id",
             "client_type",
             b"client_type",
             "operation_id",
@@ -1157,6 +1205,13 @@ class ExecutePlanRequest(google.protobuf.message.Message):
     ) -> None: ...
     @typing.overload
     def WhichOneof(
+        self,
+        oneof_group: typing_extensions.Literal[
+            "_client_observed_server_side_session_id", b"_client_observed_server_side_session_id"
+        ],
+    ) -> typing_extensions.Literal["client_observed_server_side_session_id"] | None: ...
+    @typing.overload
+    def WhichOneof(
         self, oneof_group: typing_extensions.Literal["_client_type", b"_client_type"]
     ) -> typing_extensions.Literal["client_type"] | None: ...
     @typing.overload
@@ -1169,6 +1224,7 @@ global___ExecutePlanRequest = ExecutePlanRequest
 class ExecutePlanResponse(google.protobuf.message.Message):
     """The response of a query, can be one or more for each request. Responses belonging to the
     same input query, carry the same `session_id`.
+    Next ID: 17
     """
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
@@ -1390,7 +1446,78 @@ class ExecutePlanResponse(google.protobuf.message.Message):
             self,
         ) -> None: ...
 
+    class ExecutionProgress(google.protobuf.message.Message):
+        """This message is used to communicate progress about the query progress during the execution."""
+
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        class StageInfo(google.protobuf.message.Message):
+            DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+            STAGE_ID_FIELD_NUMBER: builtins.int
+            NUM_TASKS_FIELD_NUMBER: builtins.int
+            NUM_COMPLETED_TASKS_FIELD_NUMBER: builtins.int
+            INPUT_BYTES_READ_FIELD_NUMBER: builtins.int
+            DONE_FIELD_NUMBER: builtins.int
+            stage_id: builtins.int
+            num_tasks: builtins.int
+            num_completed_tasks: builtins.int
+            input_bytes_read: builtins.int
+            done: builtins.bool
+            def __init__(
+                self,
+                *,
+                stage_id: builtins.int = ...,
+                num_tasks: builtins.int = ...,
+                num_completed_tasks: builtins.int = ...,
+                input_bytes_read: builtins.int = ...,
+                done: builtins.bool = ...,
+            ) -> None: ...
+            def ClearField(
+                self,
+                field_name: typing_extensions.Literal[
+                    "done",
+                    b"done",
+                    "input_bytes_read",
+                    b"input_bytes_read",
+                    "num_completed_tasks",
+                    b"num_completed_tasks",
+                    "num_tasks",
+                    b"num_tasks",
+                    "stage_id",
+                    b"stage_id",
+                ],
+            ) -> None: ...
+
+        STAGES_FIELD_NUMBER: builtins.int
+        NUM_INFLIGHT_TASKS_FIELD_NUMBER: builtins.int
+        @property
+        def stages(
+            self,
+        ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+            global___ExecutePlanResponse.ExecutionProgress.StageInfo
+        ]:
+            """Captures the progress of each individual stage."""
+        num_inflight_tasks: builtins.int
+        """Captures the currently in progress tasks."""
+        def __init__(
+            self,
+            *,
+            stages: collections.abc.Iterable[
+                global___ExecutePlanResponse.ExecutionProgress.StageInfo
+            ]
+            | None = ...,
+            num_inflight_tasks: builtins.int = ...,
+        ) -> None: ...
+        def ClearField(
+            self,
+            field_name: typing_extensions.Literal[
+                "num_inflight_tasks", b"num_inflight_tasks", "stages", b"stages"
+            ],
+        ) -> None: ...
+
     SESSION_ID_FIELD_NUMBER: builtins.int
+    SERVER_SIDE_SESSION_ID_FIELD_NUMBER: builtins.int
     OPERATION_ID_FIELD_NUMBER: builtins.int
     RESPONSE_ID_FIELD_NUMBER: builtins.int
     ARROW_BATCH_FIELD_NUMBER: builtins.int
@@ -1399,12 +1526,19 @@ class ExecutePlanResponse(google.protobuf.message.Message):
     STREAMING_QUERY_COMMAND_RESULT_FIELD_NUMBER: builtins.int
     GET_RESOURCES_COMMAND_RESULT_FIELD_NUMBER: builtins.int
     STREAMING_QUERY_MANAGER_COMMAND_RESULT_FIELD_NUMBER: builtins.int
+    STREAMING_QUERY_LISTENER_EVENTS_RESULT_FIELD_NUMBER: builtins.int
     RESULT_COMPLETE_FIELD_NUMBER: builtins.int
+    CREATE_RESOURCE_PROFILE_COMMAND_RESULT_FIELD_NUMBER: builtins.int
+    EXECUTION_PROGRESS_FIELD_NUMBER: builtins.int
     EXTENSION_FIELD_NUMBER: builtins.int
     METRICS_FIELD_NUMBER: builtins.int
     OBSERVED_METRICS_FIELD_NUMBER: builtins.int
     SCHEMA_FIELD_NUMBER: builtins.int
     session_id: builtins.str
+    server_side_session_id: builtins.str
+    """Server-side generated idempotency key that the client can use to assert that the server side
+    session has not changed.
+    """
     operation_id: builtins.str
     """Identifies the ExecutePlan execution.
     If set by the client in ExecutePlanRequest.operationId, that value is returned.
@@ -1441,8 +1575,21 @@ class ExecutePlanResponse(google.protobuf.message.Message):
     ) -> pyspark.sql.connect.proto.commands_pb2.StreamingQueryManagerCommandResult:
         """Response for commands on the streaming query manager."""
     @property
+    def streaming_query_listener_events_result(
+        self,
+    ) -> pyspark.sql.connect.proto.commands_pb2.StreamingQueryListenerEventsResult:
+        """Response for commands on the client side streaming query listener."""
+    @property
     def result_complete(self) -> global___ExecutePlanResponse.ResultComplete:
         """Response type informing if the stream is complete in reattachable execution."""
+    @property
+    def create_resource_profile_command_result(
+        self,
+    ) -> pyspark.sql.connect.proto.commands_pb2.CreateResourceProfileCommandResult:
+        """Response for command that creates ResourceProfile."""
+    @property
+    def execution_progress(self) -> global___ExecutePlanResponse.ExecutionProgress:
+        """(Optional) Intermediate query progress reports."""
     @property
     def extension(self) -> google.protobuf.any_pb2.Any:
         """Support arbitrary result objects."""
@@ -1465,6 +1612,7 @@ class ExecutePlanResponse(google.protobuf.message.Message):
         self,
         *,
         session_id: builtins.str = ...,
+        server_side_session_id: builtins.str = ...,
         operation_id: builtins.str = ...,
         response_id: builtins.str = ...,
         arrow_batch: global___ExecutePlanResponse.ArrowBatch | None = ...,
@@ -1477,7 +1625,12 @@ class ExecutePlanResponse(google.protobuf.message.Message):
         | None = ...,
         streaming_query_manager_command_result: pyspark.sql.connect.proto.commands_pb2.StreamingQueryManagerCommandResult
         | None = ...,
+        streaming_query_listener_events_result: pyspark.sql.connect.proto.commands_pb2.StreamingQueryListenerEventsResult
+        | None = ...,
         result_complete: global___ExecutePlanResponse.ResultComplete | None = ...,
+        create_resource_profile_command_result: pyspark.sql.connect.proto.commands_pb2.CreateResourceProfileCommandResult
+        | None = ...,
+        execution_progress: global___ExecutePlanResponse.ExecutionProgress | None = ...,
         extension: google.protobuf.any_pb2.Any | None = ...,
         metrics: global___ExecutePlanResponse.Metrics | None = ...,
         observed_metrics: collections.abc.Iterable[global___ExecutePlanResponse.ObservedMetrics]
@@ -1489,6 +1642,10 @@ class ExecutePlanResponse(google.protobuf.message.Message):
         field_name: typing_extensions.Literal[
             "arrow_batch",
             b"arrow_batch",
+            "create_resource_profile_command_result",
+            b"create_resource_profile_command_result",
+            "execution_progress",
+            b"execution_progress",
             "extension",
             b"extension",
             "get_resources_command_result",
@@ -1505,6 +1662,8 @@ class ExecutePlanResponse(google.protobuf.message.Message):
             b"sql_command_result",
             "streaming_query_command_result",
             b"streaming_query_command_result",
+            "streaming_query_listener_events_result",
+            b"streaming_query_listener_events_result",
             "streaming_query_manager_command_result",
             b"streaming_query_manager_command_result",
             "write_stream_operation_start_result",
@@ -1516,6 +1675,10 @@ class ExecutePlanResponse(google.protobuf.message.Message):
         field_name: typing_extensions.Literal[
             "arrow_batch",
             b"arrow_batch",
+            "create_resource_profile_command_result",
+            b"create_resource_profile_command_result",
+            "execution_progress",
+            b"execution_progress",
             "extension",
             b"extension",
             "get_resources_command_result",
@@ -1534,12 +1697,16 @@ class ExecutePlanResponse(google.protobuf.message.Message):
             b"result_complete",
             "schema",
             b"schema",
+            "server_side_session_id",
+            b"server_side_session_id",
             "session_id",
             b"session_id",
             "sql_command_result",
             b"sql_command_result",
             "streaming_query_command_result",
             b"streaming_query_command_result",
+            "streaming_query_listener_events_result",
+            b"streaming_query_listener_events_result",
             "streaming_query_manager_command_result",
             b"streaming_query_manager_command_result",
             "write_stream_operation_start_result",
@@ -1556,7 +1723,10 @@ class ExecutePlanResponse(google.protobuf.message.Message):
             "streaming_query_command_result",
             "get_resources_command_result",
             "streaming_query_manager_command_result",
+            "streaming_query_listener_events_result",
             "result_complete",
+            "create_resource_profile_command_result",
+            "execution_progress",
             "extension",
         ]
         | None
@@ -1805,6 +1975,7 @@ class ConfigRequest(google.protobuf.message.Message):
         def ClearField(self, field_name: typing_extensions.Literal["keys", b"keys"]) -> None: ...
 
     SESSION_ID_FIELD_NUMBER: builtins.int
+    CLIENT_OBSERVED_SERVER_SIDE_SESSION_ID_FIELD_NUMBER: builtins.int
     USER_CONTEXT_FIELD_NUMBER: builtins.int
     OPERATION_FIELD_NUMBER: builtins.int
     CLIENT_TYPE_FIELD_NUMBER: builtins.int
@@ -1815,6 +1986,12 @@ class ConfigRequest(google.protobuf.message.Message):
     by user_context.user_id). The session_id is set by the client to be able to
     collate streaming responses from different queries within the dedicated session.
     The id should be an UUID string of the format `00112233-4455-6677-8899-aabbccddeeff`
+    """
+    client_observed_server_side_session_id: builtins.str
+    """(Optional)
+
+    Server-side generated idempotency key from the previous responses (if any). Server
+    can use this to validate that the server side session has not changed.
     """
     @property
     def user_context(self) -> global___UserContext:
@@ -1831,6 +2008,7 @@ class ConfigRequest(google.protobuf.message.Message):
         self,
         *,
         session_id: builtins.str = ...,
+        client_observed_server_side_session_id: builtins.str | None = ...,
         user_context: global___UserContext | None = ...,
         operation: global___ConfigRequest.Operation | None = ...,
         client_type: builtins.str | None = ...,
@@ -1838,8 +2016,12 @@ class ConfigRequest(google.protobuf.message.Message):
     def HasField(
         self,
         field_name: typing_extensions.Literal[
+            "_client_observed_server_side_session_id",
+            b"_client_observed_server_side_session_id",
             "_client_type",
             b"_client_type",
+            "client_observed_server_side_session_id",
+            b"client_observed_server_side_session_id",
             "client_type",
             b"client_type",
             "operation",
@@ -1851,8 +2033,12 @@ class ConfigRequest(google.protobuf.message.Message):
     def ClearField(
         self,
         field_name: typing_extensions.Literal[
+            "_client_observed_server_side_session_id",
+            b"_client_observed_server_side_session_id",
             "_client_type",
             b"_client_type",
+            "client_observed_server_side_session_id",
+            b"client_observed_server_side_session_id",
             "client_type",
             b"client_type",
             "operation",
@@ -1863,6 +2049,14 @@ class ConfigRequest(google.protobuf.message.Message):
             b"user_context",
         ],
     ) -> None: ...
+    @typing.overload
+    def WhichOneof(
+        self,
+        oneof_group: typing_extensions.Literal[
+            "_client_observed_server_side_session_id", b"_client_observed_server_side_session_id"
+        ],
+    ) -> typing_extensions.Literal["client_observed_server_side_session_id"] | None: ...
+    @typing.overload
     def WhichOneof(
         self, oneof_group: typing_extensions.Literal["_client_type", b"_client_type"]
     ) -> typing_extensions.Literal["client_type"] | None: ...
@@ -1870,14 +2064,21 @@ class ConfigRequest(google.protobuf.message.Message):
 global___ConfigRequest = ConfigRequest
 
 class ConfigResponse(google.protobuf.message.Message):
-    """Response to the config request."""
+    """Response to the config request.
+    Next ID: 5
+    """
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     SESSION_ID_FIELD_NUMBER: builtins.int
+    SERVER_SIDE_SESSION_ID_FIELD_NUMBER: builtins.int
     PAIRS_FIELD_NUMBER: builtins.int
     WARNINGS_FIELD_NUMBER: builtins.int
     session_id: builtins.str
+    server_side_session_id: builtins.str
+    """Server-side generated idempotency key that the client can use to assert that the server side
+    session has not changed.
+    """
     @property
     def pairs(
         self,
@@ -1899,13 +2100,21 @@ class ConfigResponse(google.protobuf.message.Message):
         self,
         *,
         session_id: builtins.str = ...,
+        server_side_session_id: builtins.str = ...,
         pairs: collections.abc.Iterable[global___KeyValue] | None = ...,
         warnings: collections.abc.Iterable[builtins.str] | None = ...,
     ) -> None: ...
     def ClearField(
         self,
         field_name: typing_extensions.Literal[
-            "pairs", b"pairs", "session_id", b"session_id", "warnings", b"warnings"
+            "pairs",
+            b"pairs",
+            "server_side_session_id",
+            b"server_side_session_id",
+            "session_id",
+            b"session_id",
+            "warnings",
+            b"warnings",
         ],
     ) -> None: ...
 
@@ -2044,6 +2253,7 @@ class AddArtifactsRequest(google.protobuf.message.Message):
 
     SESSION_ID_FIELD_NUMBER: builtins.int
     USER_CONTEXT_FIELD_NUMBER: builtins.int
+    CLIENT_OBSERVED_SERVER_SIDE_SESSION_ID_FIELD_NUMBER: builtins.int
     CLIENT_TYPE_FIELD_NUMBER: builtins.int
     BATCH_FIELD_NUMBER: builtins.int
     BEGIN_CHUNK_FIELD_NUMBER: builtins.int
@@ -2059,6 +2269,12 @@ class AddArtifactsRequest(google.protobuf.message.Message):
     @property
     def user_context(self) -> global___UserContext:
         """User context"""
+    client_observed_server_side_session_id: builtins.str
+    """(Optional)
+
+    Server-side generated idempotency key from the previous responses (if any). Server
+    can use this to validate that the server side session has not changed.
+    """
     client_type: builtins.str
     """Provides optional information about the client sending the request. This field
     can be used for language or version specific information and is only intended for
@@ -2082,6 +2298,7 @@ class AddArtifactsRequest(google.protobuf.message.Message):
         *,
         session_id: builtins.str = ...,
         user_context: global___UserContext | None = ...,
+        client_observed_server_side_session_id: builtins.str | None = ...,
         client_type: builtins.str | None = ...,
         batch: global___AddArtifactsRequest.Batch | None = ...,
         begin_chunk: global___AddArtifactsRequest.BeginChunkedArtifact | None = ...,
@@ -2090,6 +2307,8 @@ class AddArtifactsRequest(google.protobuf.message.Message):
     def HasField(
         self,
         field_name: typing_extensions.Literal[
+            "_client_observed_server_side_session_id",
+            b"_client_observed_server_side_session_id",
             "_client_type",
             b"_client_type",
             "batch",
@@ -2098,6 +2317,8 @@ class AddArtifactsRequest(google.protobuf.message.Message):
             b"begin_chunk",
             "chunk",
             b"chunk",
+            "client_observed_server_side_session_id",
+            b"client_observed_server_side_session_id",
             "client_type",
             b"client_type",
             "payload",
@@ -2109,6 +2330,8 @@ class AddArtifactsRequest(google.protobuf.message.Message):
     def ClearField(
         self,
         field_name: typing_extensions.Literal[
+            "_client_observed_server_side_session_id",
+            b"_client_observed_server_side_session_id",
             "_client_type",
             b"_client_type",
             "batch",
@@ -2117,6 +2340,8 @@ class AddArtifactsRequest(google.protobuf.message.Message):
             b"begin_chunk",
             "chunk",
             b"chunk",
+            "client_observed_server_side_session_id",
+            b"client_observed_server_side_session_id",
             "client_type",
             b"client_type",
             "payload",
@@ -2127,6 +2352,13 @@ class AddArtifactsRequest(google.protobuf.message.Message):
             b"user_context",
         ],
     ) -> None: ...
+    @typing.overload
+    def WhichOneof(
+        self,
+        oneof_group: typing_extensions.Literal[
+            "_client_observed_server_side_session_id", b"_client_observed_server_side_session_id"
+        ],
+    ) -> typing_extensions.Literal["client_observed_server_side_session_id"] | None: ...
     @typing.overload
     def WhichOneof(
         self, oneof_group: typing_extensions.Literal["_client_type", b"_client_type"]
@@ -2141,6 +2373,7 @@ global___AddArtifactsRequest = AddArtifactsRequest
 class AddArtifactsResponse(google.protobuf.message.Message):
     """Response to adding an artifact. Contains relevant metadata to verify successful transfer of
     artifact(s).
+    Next ID: 4
     """
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
@@ -2171,7 +2404,15 @@ class AddArtifactsResponse(google.protobuf.message.Message):
             ],
         ) -> None: ...
 
+    SESSION_ID_FIELD_NUMBER: builtins.int
+    SERVER_SIDE_SESSION_ID_FIELD_NUMBER: builtins.int
     ARTIFACTS_FIELD_NUMBER: builtins.int
+    session_id: builtins.str
+    """Session id in which the AddArtifact was running."""
+    server_side_session_id: builtins.str
+    """Server-side generated idempotency key that the client can use to assert that the server side
+    session has not changed.
+    """
     @property
     def artifacts(
         self,
@@ -2182,11 +2423,21 @@ class AddArtifactsResponse(google.protobuf.message.Message):
     def __init__(
         self,
         *,
+        session_id: builtins.str = ...,
+        server_side_session_id: builtins.str = ...,
         artifacts: collections.abc.Iterable[global___AddArtifactsResponse.ArtifactSummary]
         | None = ...,
     ) -> None: ...
     def ClearField(
-        self, field_name: typing_extensions.Literal["artifacts", b"artifacts"]
+        self,
+        field_name: typing_extensions.Literal[
+            "artifacts",
+            b"artifacts",
+            "server_side_session_id",
+            b"server_side_session_id",
+            "session_id",
+            b"session_id",
+        ],
     ) -> None: ...
 
 global___AddArtifactsResponse = AddArtifactsResponse
@@ -2197,6 +2448,7 @@ class ArtifactStatusesRequest(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     SESSION_ID_FIELD_NUMBER: builtins.int
+    CLIENT_OBSERVED_SERVER_SIDE_SESSION_ID_FIELD_NUMBER: builtins.int
     USER_CONTEXT_FIELD_NUMBER: builtins.int
     CLIENT_TYPE_FIELD_NUMBER: builtins.int
     NAMES_FIELD_NUMBER: builtins.int
@@ -2207,6 +2459,12 @@ class ArtifactStatusesRequest(google.protobuf.message.Message):
     by user_context.user_id). The session_id is set by the client to be able to
     collate streaming responses from different queries within the dedicated session.
     The id should be an UUID string of the format `00112233-4455-6677-8899-aabbccddeeff`
+    """
+    client_observed_server_side_session_id: builtins.str
+    """(Optional)
+
+    Server-side generated idempotency key from the previous responses (if any). Server
+    can use this to validate that the server side session has not changed.
     """
     @property
     def user_context(self) -> global___UserContext:
@@ -2231,6 +2489,7 @@ class ArtifactStatusesRequest(google.protobuf.message.Message):
         self,
         *,
         session_id: builtins.str = ...,
+        client_observed_server_side_session_id: builtins.str | None = ...,
         user_context: global___UserContext | None = ...,
         client_type: builtins.str | None = ...,
         names: collections.abc.Iterable[builtins.str] | None = ...,
@@ -2238,8 +2497,12 @@ class ArtifactStatusesRequest(google.protobuf.message.Message):
     def HasField(
         self,
         field_name: typing_extensions.Literal[
+            "_client_observed_server_side_session_id",
+            b"_client_observed_server_side_session_id",
             "_client_type",
             b"_client_type",
+            "client_observed_server_side_session_id",
+            b"client_observed_server_side_session_id",
             "client_type",
             b"client_type",
             "user_context",
@@ -2249,8 +2512,12 @@ class ArtifactStatusesRequest(google.protobuf.message.Message):
     def ClearField(
         self,
         field_name: typing_extensions.Literal[
+            "_client_observed_server_side_session_id",
+            b"_client_observed_server_side_session_id",
             "_client_type",
             b"_client_type",
+            "client_observed_server_side_session_id",
+            b"client_observed_server_side_session_id",
             "client_type",
             b"client_type",
             "names",
@@ -2261,6 +2528,14 @@ class ArtifactStatusesRequest(google.protobuf.message.Message):
             b"user_context",
         ],
     ) -> None: ...
+    @typing.overload
+    def WhichOneof(
+        self,
+        oneof_group: typing_extensions.Literal[
+            "_client_observed_server_side_session_id", b"_client_observed_server_side_session_id"
+        ],
+    ) -> typing_extensions.Literal["client_observed_server_side_session_id"] | None: ...
+    @typing.overload
     def WhichOneof(
         self, oneof_group: typing_extensions.Literal["_client_type", b"_client_type"]
     ) -> typing_extensions.Literal["client_type"] | None: ...
@@ -2268,24 +2543,11 @@ class ArtifactStatusesRequest(google.protobuf.message.Message):
 global___ArtifactStatusesRequest = ArtifactStatusesRequest
 
 class ArtifactStatusesResponse(google.protobuf.message.Message):
-    """Response to checking artifact statuses."""
+    """Response to checking artifact statuses.
+    Next ID: 4
+    """
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-    class ArtifactStatus(google.protobuf.message.Message):
-        DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-        EXISTS_FIELD_NUMBER: builtins.int
-        exists: builtins.bool
-        """Exists or not particular artifact at the server."""
-        def __init__(
-            self,
-            *,
-            exists: builtins.bool = ...,
-        ) -> None: ...
-        def ClearField(
-            self, field_name: typing_extensions.Literal["exists", b"exists"]
-        ) -> None: ...
 
     class StatusesEntry(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
@@ -2308,7 +2570,30 @@ class ArtifactStatusesResponse(google.protobuf.message.Message):
             self, field_name: typing_extensions.Literal["key", b"key", "value", b"value"]
         ) -> None: ...
 
+    class ArtifactStatus(google.protobuf.message.Message):
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        EXISTS_FIELD_NUMBER: builtins.int
+        exists: builtins.bool
+        """Exists or not particular artifact at the server."""
+        def __init__(
+            self,
+            *,
+            exists: builtins.bool = ...,
+        ) -> None: ...
+        def ClearField(
+            self, field_name: typing_extensions.Literal["exists", b"exists"]
+        ) -> None: ...
+
+    SESSION_ID_FIELD_NUMBER: builtins.int
+    SERVER_SIDE_SESSION_ID_FIELD_NUMBER: builtins.int
     STATUSES_FIELD_NUMBER: builtins.int
+    session_id: builtins.str
+    """Session id in which the ArtifactStatus was running."""
+    server_side_session_id: builtins.str
+    """Server-side generated idempotency key that the client can use to assert that the server side
+    session has not changed.
+    """
     @property
     def statuses(
         self,
@@ -2319,13 +2604,23 @@ class ArtifactStatusesResponse(google.protobuf.message.Message):
     def __init__(
         self,
         *,
+        session_id: builtins.str = ...,
+        server_side_session_id: builtins.str = ...,
         statuses: collections.abc.Mapping[
             builtins.str, global___ArtifactStatusesResponse.ArtifactStatus
         ]
         | None = ...,
     ) -> None: ...
     def ClearField(
-        self, field_name: typing_extensions.Literal["statuses", b"statuses"]
+        self,
+        field_name: typing_extensions.Literal[
+            "server_side_session_id",
+            b"server_side_session_id",
+            "session_id",
+            b"session_id",
+            "statuses",
+            b"statuses",
+        ],
     ) -> None: ...
 
 global___ArtifactStatusesResponse = ArtifactStatusesResponse
@@ -2362,6 +2657,7 @@ class InterruptRequest(google.protobuf.message.Message):
     """Interrupt the running execution within the session with the provided operation_id."""
 
     SESSION_ID_FIELD_NUMBER: builtins.int
+    CLIENT_OBSERVED_SERVER_SIDE_SESSION_ID_FIELD_NUMBER: builtins.int
     USER_CONTEXT_FIELD_NUMBER: builtins.int
     CLIENT_TYPE_FIELD_NUMBER: builtins.int
     INTERRUPT_TYPE_FIELD_NUMBER: builtins.int
@@ -2374,6 +2670,12 @@ class InterruptRequest(google.protobuf.message.Message):
     by user_context.user_id). The session_id is set by the client to be able to
     collate streaming responses from different queries within the dedicated session.
     The id should be an UUID string of the format `00112233-4455-6677-8899-aabbccddeeff`
+    """
+    client_observed_server_side_session_id: builtins.str
+    """(Optional)
+
+    Server-side generated idempotency key from the previous responses (if any). Server
+    can use this to validate that the server side session has not changed.
     """
     @property
     def user_context(self) -> global___UserContext:
@@ -2393,6 +2695,7 @@ class InterruptRequest(google.protobuf.message.Message):
         self,
         *,
         session_id: builtins.str = ...,
+        client_observed_server_side_session_id: builtins.str | None = ...,
         user_context: global___UserContext | None = ...,
         client_type: builtins.str | None = ...,
         interrupt_type: global___InterruptRequest.InterruptType.ValueType = ...,
@@ -2402,8 +2705,12 @@ class InterruptRequest(google.protobuf.message.Message):
     def HasField(
         self,
         field_name: typing_extensions.Literal[
+            "_client_observed_server_side_session_id",
+            b"_client_observed_server_side_session_id",
             "_client_type",
             b"_client_type",
+            "client_observed_server_side_session_id",
+            b"client_observed_server_side_session_id",
             "client_type",
             b"client_type",
             "interrupt",
@@ -2419,8 +2726,12 @@ class InterruptRequest(google.protobuf.message.Message):
     def ClearField(
         self,
         field_name: typing_extensions.Literal[
+            "_client_observed_server_side_session_id",
+            b"_client_observed_server_side_session_id",
             "_client_type",
             b"_client_type",
+            "client_observed_server_side_session_id",
+            b"client_observed_server_side_session_id",
             "client_type",
             b"client_type",
             "interrupt",
@@ -2439,6 +2750,13 @@ class InterruptRequest(google.protobuf.message.Message):
     ) -> None: ...
     @typing.overload
     def WhichOneof(
+        self,
+        oneof_group: typing_extensions.Literal[
+            "_client_observed_server_side_session_id", b"_client_observed_server_side_session_id"
+        ],
+    ) -> typing_extensions.Literal["client_observed_server_side_session_id"] | None: ...
+    @typing.overload
+    def WhichOneof(
         self, oneof_group: typing_extensions.Literal["_client_type", b"_client_type"]
     ) -> typing_extensions.Literal["client_type"] | None: ...
     @typing.overload
@@ -2449,12 +2767,19 @@ class InterruptRequest(google.protobuf.message.Message):
 global___InterruptRequest = InterruptRequest
 
 class InterruptResponse(google.protobuf.message.Message):
+    """Next ID: 4"""
+
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     SESSION_ID_FIELD_NUMBER: builtins.int
+    SERVER_SIDE_SESSION_ID_FIELD_NUMBER: builtins.int
     INTERRUPTED_IDS_FIELD_NUMBER: builtins.int
     session_id: builtins.str
     """Session id in which the interrupt was running."""
+    server_side_session_id: builtins.str
+    """Server-side generated idempotency key that the client can use to assert that the server side
+    session has not changed.
+    """
     @property
     def interrupted_ids(
         self,
@@ -2464,12 +2789,18 @@ class InterruptResponse(google.protobuf.message.Message):
         self,
         *,
         session_id: builtins.str = ...,
+        server_side_session_id: builtins.str = ...,
         interrupted_ids: collections.abc.Iterable[builtins.str] | None = ...,
     ) -> None: ...
     def ClearField(
         self,
         field_name: typing_extensions.Literal[
-            "interrupted_ids", b"interrupted_ids", "session_id", b"session_id"
+            "interrupted_ids",
+            b"interrupted_ids",
+            "server_side_session_id",
+            b"server_side_session_id",
+            "session_id",
+            b"session_id",
         ],
     ) -> None: ...
 
@@ -2504,6 +2835,7 @@ class ReattachExecuteRequest(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     SESSION_ID_FIELD_NUMBER: builtins.int
+    CLIENT_OBSERVED_SERVER_SIDE_SESSION_ID_FIELD_NUMBER: builtins.int
     USER_CONTEXT_FIELD_NUMBER: builtins.int
     OPERATION_ID_FIELD_NUMBER: builtins.int
     CLIENT_TYPE_FIELD_NUMBER: builtins.int
@@ -2513,6 +2845,12 @@ class ReattachExecuteRequest(google.protobuf.message.Message):
 
     The session_id of the request to reattach to.
     This must be an id of existing session.
+    """
+    client_observed_server_side_session_id: builtins.str
+    """(Optional)
+
+    Server-side generated idempotency key from the previous responses (if any). Server
+    can use this to validate that the server side session has not changed.
     """
     @property
     def user_context(self) -> global___UserContext:
@@ -2545,6 +2883,7 @@ class ReattachExecuteRequest(google.protobuf.message.Message):
         self,
         *,
         session_id: builtins.str = ...,
+        client_observed_server_side_session_id: builtins.str | None = ...,
         user_context: global___UserContext | None = ...,
         operation_id: builtins.str = ...,
         client_type: builtins.str | None = ...,
@@ -2553,10 +2892,14 @@ class ReattachExecuteRequest(google.protobuf.message.Message):
     def HasField(
         self,
         field_name: typing_extensions.Literal[
+            "_client_observed_server_side_session_id",
+            b"_client_observed_server_side_session_id",
             "_client_type",
             b"_client_type",
             "_last_response_id",
             b"_last_response_id",
+            "client_observed_server_side_session_id",
+            b"client_observed_server_side_session_id",
             "client_type",
             b"client_type",
             "last_response_id",
@@ -2568,10 +2911,14 @@ class ReattachExecuteRequest(google.protobuf.message.Message):
     def ClearField(
         self,
         field_name: typing_extensions.Literal[
+            "_client_observed_server_side_session_id",
+            b"_client_observed_server_side_session_id",
             "_client_type",
             b"_client_type",
             "_last_response_id",
             b"_last_response_id",
+            "client_observed_server_side_session_id",
+            b"client_observed_server_side_session_id",
             "client_type",
             b"client_type",
             "last_response_id",
@@ -2584,6 +2931,13 @@ class ReattachExecuteRequest(google.protobuf.message.Message):
             b"user_context",
         ],
     ) -> None: ...
+    @typing.overload
+    def WhichOneof(
+        self,
+        oneof_group: typing_extensions.Literal[
+            "_client_observed_server_side_session_id", b"_client_observed_server_side_session_id"
+        ],
+    ) -> typing_extensions.Literal["client_observed_server_side_session_id"] | None: ...
     @typing.overload
     def WhichOneof(
         self, oneof_group: typing_extensions.Literal["_client_type", b"_client_type"]
@@ -2631,6 +2985,7 @@ class ReleaseExecuteRequest(google.protobuf.message.Message):
         ) -> None: ...
 
     SESSION_ID_FIELD_NUMBER: builtins.int
+    CLIENT_OBSERVED_SERVER_SIDE_SESSION_ID_FIELD_NUMBER: builtins.int
     USER_CONTEXT_FIELD_NUMBER: builtins.int
     OPERATION_ID_FIELD_NUMBER: builtins.int
     CLIENT_TYPE_FIELD_NUMBER: builtins.int
@@ -2641,6 +2996,12 @@ class ReleaseExecuteRequest(google.protobuf.message.Message):
 
     The session_id of the request to reattach to.
     This must be an id of existing session.
+    """
+    client_observed_server_side_session_id: builtins.str
+    """(Optional)
+
+    Server-side generated idempotency key from the previous responses (if any). Server
+    can use this to validate that the server side session has not changed.
     """
     @property
     def user_context(self) -> global___UserContext:
@@ -2667,6 +3028,7 @@ class ReleaseExecuteRequest(google.protobuf.message.Message):
         self,
         *,
         session_id: builtins.str = ...,
+        client_observed_server_side_session_id: builtins.str | None = ...,
         user_context: global___UserContext | None = ...,
         operation_id: builtins.str = ...,
         client_type: builtins.str | None = ...,
@@ -2676,8 +3038,12 @@ class ReleaseExecuteRequest(google.protobuf.message.Message):
     def HasField(
         self,
         field_name: typing_extensions.Literal[
+            "_client_observed_server_side_session_id",
+            b"_client_observed_server_side_session_id",
             "_client_type",
             b"_client_type",
+            "client_observed_server_side_session_id",
+            b"client_observed_server_side_session_id",
             "client_type",
             b"client_type",
             "release",
@@ -2693,8 +3059,12 @@ class ReleaseExecuteRequest(google.protobuf.message.Message):
     def ClearField(
         self,
         field_name: typing_extensions.Literal[
+            "_client_observed_server_side_session_id",
+            b"_client_observed_server_side_session_id",
             "_client_type",
             b"_client_type",
+            "client_observed_server_side_session_id",
+            b"client_observed_server_side_session_id",
             "client_type",
             b"client_type",
             "operation_id",
@@ -2713,6 +3083,13 @@ class ReleaseExecuteRequest(google.protobuf.message.Message):
     ) -> None: ...
     @typing.overload
     def WhichOneof(
+        self,
+        oneof_group: typing_extensions.Literal[
+            "_client_observed_server_side_session_id", b"_client_observed_server_side_session_id"
+        ],
+    ) -> typing_extensions.Literal["client_observed_server_side_session_id"] | None: ...
+    @typing.overload
+    def WhichOneof(
         self, oneof_group: typing_extensions.Literal["_client_type", b"_client_type"]
     ) -> typing_extensions.Literal["client_type"] | None: ...
     @typing.overload
@@ -2723,12 +3100,19 @@ class ReleaseExecuteRequest(google.protobuf.message.Message):
 global___ReleaseExecuteRequest = ReleaseExecuteRequest
 
 class ReleaseExecuteResponse(google.protobuf.message.Message):
+    """Next ID: 4"""
+
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     SESSION_ID_FIELD_NUMBER: builtins.int
+    SERVER_SIDE_SESSION_ID_FIELD_NUMBER: builtins.int
     OPERATION_ID_FIELD_NUMBER: builtins.int
     session_id: builtins.str
     """Session id in which the release was running."""
+    server_side_session_id: builtins.str
+    """Server-side generated idempotency key that the client can use to assert that the server side
+    session has not changed.
+    """
     operation_id: builtins.str
     """Operation id of the operation on which the release executed.
     If the operation couldn't be found (because e.g. it was concurrently released), will be unset.
@@ -2738,6 +3122,7 @@ class ReleaseExecuteResponse(google.protobuf.message.Message):
         self,
         *,
         session_id: builtins.str = ...,
+        server_side_session_id: builtins.str = ...,
         operation_id: builtins.str | None = ...,
     ) -> None: ...
     def HasField(
@@ -2753,6 +3138,8 @@ class ReleaseExecuteResponse(google.protobuf.message.Message):
             b"_operation_id",
             "operation_id",
             b"operation_id",
+            "server_side_session_id",
+            b"server_side_session_id",
             "session_id",
             b"session_id",
         ],
@@ -2763,10 +3150,100 @@ class ReleaseExecuteResponse(google.protobuf.message.Message):
 
 global___ReleaseExecuteResponse = ReleaseExecuteResponse
 
+class ReleaseSessionRequest(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    SESSION_ID_FIELD_NUMBER: builtins.int
+    USER_CONTEXT_FIELD_NUMBER: builtins.int
+    CLIENT_TYPE_FIELD_NUMBER: builtins.int
+    session_id: builtins.str
+    """(Required)
+
+    The session_id of the request to reattach to.
+    This must be an id of existing session.
+    """
+    @property
+    def user_context(self) -> global___UserContext:
+        """(Required) User context
+
+        user_context.user_id and session+id both identify a unique remote spark session on the
+        server side.
+        """
+    client_type: builtins.str
+    """Provides optional information about the client sending the request. This field
+    can be used for language or version specific information and is only intended for
+    logging purposes and will not be interpreted by the server.
+    """
+    def __init__(
+        self,
+        *,
+        session_id: builtins.str = ...,
+        user_context: global___UserContext | None = ...,
+        client_type: builtins.str | None = ...,
+    ) -> None: ...
+    def HasField(
+        self,
+        field_name: typing_extensions.Literal[
+            "_client_type",
+            b"_client_type",
+            "client_type",
+            b"client_type",
+            "user_context",
+            b"user_context",
+        ],
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing_extensions.Literal[
+            "_client_type",
+            b"_client_type",
+            "client_type",
+            b"client_type",
+            "session_id",
+            b"session_id",
+            "user_context",
+            b"user_context",
+        ],
+    ) -> None: ...
+    def WhichOneof(
+        self, oneof_group: typing_extensions.Literal["_client_type", b"_client_type"]
+    ) -> typing_extensions.Literal["client_type"] | None: ...
+
+global___ReleaseSessionRequest = ReleaseSessionRequest
+
+class ReleaseSessionResponse(google.protobuf.message.Message):
+    """Next ID: 3"""
+
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    SESSION_ID_FIELD_NUMBER: builtins.int
+    SERVER_SIDE_SESSION_ID_FIELD_NUMBER: builtins.int
+    session_id: builtins.str
+    """Session id of the session on which the release executed."""
+    server_side_session_id: builtins.str
+    """Server-side generated idempotency key that the client can use to assert that the server side
+    session has not changed.
+    """
+    def __init__(
+        self,
+        *,
+        session_id: builtins.str = ...,
+        server_side_session_id: builtins.str = ...,
+    ) -> None: ...
+    def ClearField(
+        self,
+        field_name: typing_extensions.Literal[
+            "server_side_session_id", b"server_side_session_id", "session_id", b"session_id"
+        ],
+    ) -> None: ...
+
+global___ReleaseSessionResponse = ReleaseSessionResponse
+
 class FetchErrorDetailsRequest(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     SESSION_ID_FIELD_NUMBER: builtins.int
+    CLIENT_OBSERVED_SERVER_SIDE_SESSION_ID_FIELD_NUMBER: builtins.int
     USER_CONTEXT_FIELD_NUMBER: builtins.int
     ERROR_ID_FIELD_NUMBER: builtins.int
     CLIENT_TYPE_FIELD_NUMBER: builtins.int
@@ -2774,6 +3251,12 @@ class FetchErrorDetailsRequest(google.protobuf.message.Message):
     """(Required)
     The session_id specifies a Spark session for a user identified by user_context.user_id.
     The id should be a UUID string of the format `00112233-4455-6677-8899-aabbccddeeff`.
+    """
+    client_observed_server_side_session_id: builtins.str
+    """(Optional)
+
+    Server-side generated idempotency key from the previous responses (if any). Server
+    can use this to validate that the server side session has not changed.
     """
     @property
     def user_context(self) -> global___UserContext:
@@ -2791,6 +3274,7 @@ class FetchErrorDetailsRequest(google.protobuf.message.Message):
         self,
         *,
         session_id: builtins.str = ...,
+        client_observed_server_side_session_id: builtins.str | None = ...,
         user_context: global___UserContext | None = ...,
         error_id: builtins.str = ...,
         client_type: builtins.str | None = ...,
@@ -2798,8 +3282,12 @@ class FetchErrorDetailsRequest(google.protobuf.message.Message):
     def HasField(
         self,
         field_name: typing_extensions.Literal[
+            "_client_observed_server_side_session_id",
+            b"_client_observed_server_side_session_id",
             "_client_type",
             b"_client_type",
+            "client_observed_server_side_session_id",
+            b"client_observed_server_side_session_id",
             "client_type",
             b"client_type",
             "user_context",
@@ -2809,8 +3297,12 @@ class FetchErrorDetailsRequest(google.protobuf.message.Message):
     def ClearField(
         self,
         field_name: typing_extensions.Literal[
+            "_client_observed_server_side_session_id",
+            b"_client_observed_server_side_session_id",
             "_client_type",
             b"_client_type",
+            "client_observed_server_side_session_id",
+            b"client_observed_server_side_session_id",
             "client_type",
             b"client_type",
             "error_id",
@@ -2821,6 +3313,14 @@ class FetchErrorDetailsRequest(google.protobuf.message.Message):
             b"user_context",
         ],
     ) -> None: ...
+    @typing.overload
+    def WhichOneof(
+        self,
+        oneof_group: typing_extensions.Literal[
+            "_client_observed_server_side_session_id", b"_client_observed_server_side_session_id"
+        ],
+    ) -> typing_extensions.Literal["client_observed_server_side_session_id"] | None: ...
+    @typing.overload
     def WhichOneof(
         self, oneof_group: typing_extensions.Literal["_client_type", b"_client_type"]
     ) -> typing_extensions.Literal["client_type"] | None: ...
@@ -2828,6 +3328,8 @@ class FetchErrorDetailsRequest(google.protobuf.message.Message):
 global___FetchErrorDetailsRequest = FetchErrorDetailsRequest
 
 class FetchErrorDetailsResponse(google.protobuf.message.Message):
+    """Next ID: 5"""
+
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     class StackTraceElement(google.protobuf.message.Message):
@@ -2911,7 +3413,7 @@ class FetchErrorDetailsResponse(google.protobuf.message.Message):
         START_INDEX_FIELD_NUMBER: builtins.int
         STOP_INDEX_FIELD_NUMBER: builtins.int
         FRAGMENT_FIELD_NUMBER: builtins.int
-        CALLSITE_FIELD_NUMBER: builtins.int
+        CALL_SITE_FIELD_NUMBER: builtins.int
         SUMMARY_FIELD_NUMBER: builtins.int
         context_type: global___FetchErrorDetailsResponse.QueryContext.ContextType.ValueType
         object_type: builtins.str
@@ -2930,7 +3432,7 @@ class FetchErrorDetailsResponse(google.protobuf.message.Message):
         """The stopping index in the query which throws the exception. The index starts from 0."""
         fragment: builtins.str
         """The corresponding fragment of the query which throws the exception."""
-        callSite: builtins.str
+        call_site: builtins.str
         """The user code (call site of the API) that caused throwing the exception."""
         summary: builtins.str
         """Summary of the exception cause."""
@@ -2943,14 +3445,14 @@ class FetchErrorDetailsResponse(google.protobuf.message.Message):
             start_index: builtins.int = ...,
             stop_index: builtins.int = ...,
             fragment: builtins.str = ...,
-            callSite: builtins.str = ...,
+            call_site: builtins.str = ...,
             summary: builtins.str = ...,
         ) -> None: ...
         def ClearField(
             self,
             field_name: typing_extensions.Literal[
-                "callSite",
-                b"callSite",
+                "call_site",
+                b"call_site",
                 "context_type",
                 b"context_type",
                 "fragment",
@@ -3146,8 +3648,15 @@ class FetchErrorDetailsResponse(google.protobuf.message.Message):
             self, oneof_group: typing_extensions.Literal["_spark_throwable", b"_spark_throwable"]
         ) -> typing_extensions.Literal["spark_throwable"] | None: ...
 
+    SERVER_SIDE_SESSION_ID_FIELD_NUMBER: builtins.int
+    SESSION_ID_FIELD_NUMBER: builtins.int
     ROOT_ERROR_IDX_FIELD_NUMBER: builtins.int
     ERRORS_FIELD_NUMBER: builtins.int
+    server_side_session_id: builtins.str
+    """Server-side generated idempotency key that the client can use to assert that the server side
+    session has not changed.
+    """
+    session_id: builtins.str
     root_error_idx: builtins.int
     """The index of the root error in errors. The field will not be set if the error is not found."""
     @property
@@ -3160,6 +3669,8 @@ class FetchErrorDetailsResponse(google.protobuf.message.Message):
     def __init__(
         self,
         *,
+        server_side_session_id: builtins.str = ...,
+        session_id: builtins.str = ...,
         root_error_idx: builtins.int | None = ...,
         errors: collections.abc.Iterable[global___FetchErrorDetailsResponse.Error] | None = ...,
     ) -> None: ...
@@ -3178,6 +3689,10 @@ class FetchErrorDetailsResponse(google.protobuf.message.Message):
             b"errors",
             "root_error_idx",
             b"root_error_idx",
+            "server_side_session_id",
+            b"server_side_session_id",
+            "session_id",
+            b"session_id",
         ],
     ) -> None: ...
     def WhichOneof(
