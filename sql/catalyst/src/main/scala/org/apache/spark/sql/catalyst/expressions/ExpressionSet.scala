@@ -27,7 +27,7 @@ object ExpressionSet {
    */
   def apply(expressions: IterableOnce[Expression]): ExpressionSet = {
     val set = new ExpressionSet()
-    expressions.foreach(set.add)
+    expressions.iterator.foreach(set.add)
     set
   }
 
