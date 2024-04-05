@@ -16,11 +16,13 @@
  */
 package org.apache.spark.sql.execution.datasources.v2.state
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, JoinedRow, UnsafeRow}
+import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, UnsafeRow}
 import org.apache.spark.sql.connector.read.{InputPartition, PartitionReader, PartitionReaderFactory}
+import org.apache.spark.sql.execution.datasources.v2.state.metadata.StateMetadataPartitionReader
 import org.apache.spark.sql.execution.datasources.v2.state.utils.SchemaUtil
-import org.apache.spark.sql.execution.streaming.state.{ReadStateStore, StateStore, StateStoreConf, StateStoreId, StateStoreProviderId}
+import org.apache.spark.sql.execution.streaming.state.{NoPrefixKeyStateEncoderSpec, PrefixKeyScanStateEncoderSpec, ReadStateStore, StateStoreConf, StateStoreId, StateStoreProvider, StateStoreProviderId}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.SerializableConfiguration
 
@@ -47,22 +49,51 @@ class StatePartitionReader(
     storeConf: StateStoreConf,
     hadoopConf: SerializableConfiguration,
     partition: StateStoreInputPartition,
-    schema: StructType) extends PartitionReader[InternalRow] {
+    schema: StructType) extends PartitionReader[InternalRow] with Logging {
 
   private val keySchema = SchemaUtil.getSchemaAsDataType(schema, "key").asInstanceOf[StructType]
   private val valueSchema = SchemaUtil.getSchemaAsDataType(schema, "value").asInstanceOf[StructType]
 
-  private lazy val store: ReadStateStore = {
+  private lazy val provider: StateStoreProvider = {
     val stateStoreId = StateStoreId(partition.sourceOptions.stateCheckpointLocation.toString,
       partition.sourceOptions.operatorId, partition.partition, partition.sourceOptions.storeName)
     val stateStoreProviderId = StateStoreProviderId(stateStoreId, partition.queryId)
+    val allStateStoreMetadata = new StateMetadataPartitionReader(
+      partition.sourceOptions.stateCheckpointLocation.getParent.toString, hadoopConf)
+      .stateMetadata.toArray
+    val stateStoreMetadata = allStateStoreMetadata.filter { entry =>
+      entry.operatorId == partition.sourceOptions.operatorId &&
+        entry.stateStoreName == partition.sourceOptions.storeName
+    }
+    val numColsPrefixKey = if (stateStoreMetadata.isEmpty) {
+      logWarning("Metadata for state store not found, possible cause is this checkpoint " +
+        "is created by older version of spark. If the query has session window aggregation, " +
+        "the state can't be read correctly and runtime exception will be thrown. " +
+        "Run the streaming query in newer spark version to generate state metadata " +
+        "can fix the issue.")
+      0
+    } else {
+      require(stateStoreMetadata.length == 1)
+      stateStoreMetadata.head.numColsPrefixKey
+    }
 
-    // TODO: This does not handle the case of session window aggregation; we don't have an
-    //  information whether the state store uses prefix scan or not. We will have to add such
-    //  information to determine the right encoder/decoder for the data.
-    StateStore.getReadOnly(stateStoreProviderId, keySchema, valueSchema,
-      numColsPrefixKey = 0, version = partition.sourceOptions.batchId + 1, storeConf = storeConf,
-      hadoopConf = hadoopConf.value)
+    // TODO: currently we don't support RangeKeyScanStateEncoderSpec. Support for this will be
+    // added in the future along with state metadata changes.
+    // Filed JIRA here: https://issues.apache.org/jira/browse/SPARK-47524
+    val keyStateEncoderType = if (numColsPrefixKey > 0) {
+      PrefixKeyScanStateEncoderSpec(keySchema, numColsPrefixKey)
+    } else {
+      NoPrefixKeyStateEncoderSpec(keySchema)
+    }
+
+    StateStoreProvider.createAndInit(
+      stateStoreProviderId, keySchema, valueSchema, keyStateEncoderType,
+      useColumnFamilies = false, storeConf, hadoopConf.value,
+      useMultipleValuesPerKey = false)
+  }
+
+  private lazy val store: ReadStateStore = {
+    provider.getReadStore(partition.sourceOptions.batchId + 1)
   }
 
   private lazy val iter: Iterator[InternalRow] = {
@@ -81,28 +112,19 @@ class StatePartitionReader(
     }
   }
 
-  private val joinedRow = new JoinedRow()
-
-  private def addMetadata(row: InternalRow): InternalRow = {
-    val metadataRow = new GenericInternalRow(
-      StateTable.METADATA_COLUMNS.map(_.name()).map {
-        case "_partition_id" => partition.partition.asInstanceOf[Any]
-      }.toArray
-    )
-    joinedRow.withLeft(row).withRight(metadataRow)
-  }
-
-  override def get(): InternalRow = addMetadata(current)
+  override def get(): InternalRow = current
 
   override def close(): Unit = {
     current = null
     store.abort()
+    provider.close()
   }
 
   private def unifyStateRowPair(pair: (UnsafeRow, UnsafeRow)): InternalRow = {
-    val row = new GenericInternalRow(2)
+    val row = new GenericInternalRow(3)
     row.update(0, pair._1)
     row.update(1, pair._2)
+    row.update(2, partition.partition)
     row
   }
 }

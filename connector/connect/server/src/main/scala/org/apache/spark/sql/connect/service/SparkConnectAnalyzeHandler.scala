@@ -27,15 +27,21 @@ import org.apache.spark.sql.Dataset
 import org.apache.spark.sql.connect.common.{DataTypeProtoConverter, InvalidPlanInput, StorageLevelProtoConverter}
 import org.apache.spark.sql.connect.planner.SparkConnectPlanner
 import org.apache.spark.sql.execution.{CodegenMode, CostMode, ExtendedMode, FormattedMode, SimpleMode}
+import org.apache.spark.util.ArrayImplicits._
 
 private[connect] class SparkConnectAnalyzeHandler(
     responseObserver: StreamObserver[proto.AnalyzePlanResponse])
     extends Logging {
 
   def handle(request: proto.AnalyzePlanRequest): Unit = {
+    val previousSessionId = request.hasClientObservedServerSideSessionId match {
+      case true => Some(request.getClientObservedServerSideSessionId)
+      case false => None
+    }
     val sessionHolder = SparkConnectService.getOrCreateIsolatedSession(
       request.getUserContext.getUserId,
-      request.getSessionId)
+      request.getSessionId,
+      previousSessionId)
     // `withSession` ensures that session-specific artifacts (such as JARs and class files) are
     // available during processing (such as deserialization).
     sessionHolder.withSession { _ =>
@@ -128,7 +134,7 @@ private[connect] class SparkConnectAnalyzeHandler(
         builder.setInputFiles(
           proto.AnalyzePlanResponse.InputFiles
             .newBuilder()
-            .addAllFiles(inputFiles.toSeq.asJava)
+            .addAllFiles(inputFiles.toImmutableArraySeq.asJava)
             .build())
 
       case proto.AnalyzePlanRequest.AnalyzeCase.SPARK_VERSION =>

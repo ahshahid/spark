@@ -49,7 +49,7 @@ class StateDataSourceNegativeTestSuite extends StateDataSourceTestBase {
         CheckLastBatch((6, 0), (7, 1), (8, 0))
       )
 
-      intercept[IllegalArgumentException] {
+      intercept[StateDataSourceReadStateSchemaFailure] {
         spark.read.format("statestore").load(tempDir.getAbsolutePath)
       }
     }
@@ -67,7 +67,7 @@ class StateDataSourceNegativeTestSuite extends StateDataSourceTestBase {
       offsetLog.purgeAfter(0)
       commitLog.purgeAfter(-1)
 
-      intercept[IllegalStateException] {
+      intercept[StataDataSourceCommittedBatchUnavailable] {
         spark.read.format("statestore").load(tempDir.getAbsolutePath)
       }
     }
@@ -98,67 +98,79 @@ class StateDataSourceNegativeTestSuite extends StateDataSourceTestBase {
 
       rewriteStateSchemaFileToDummy()
 
-      intercept[IllegalArgumentException] {
+      intercept[StateDataSourceReadStateSchemaFailure] {
         spark.read.format("statestore").load(tempDir.getAbsolutePath)
       }
     }
   }
 
   test("ERROR: path is not specified") {
-    intercept[IllegalArgumentException] {
+    val exc = intercept[StateDataSourceUnspecifiedRequiredOption] {
       spark.read.format("statestore").load()
     }
+    checkError(exc, "STDS_REQUIRED_OPTION_UNSPECIFIED", "42601",
+      Map("optionName" -> StateSourceOptions.PATH))
   }
 
   test("ERROR: operator ID specified to negative") {
     withTempDir { tempDir =>
-      intercept[IllegalArgumentException] {
+      val exc = intercept[StateDataSourceInvalidOptionValueIsNegative] {
         spark.read.format("statestore")
           .option(StateSourceOptions.OPERATOR_ID, -1)
           // trick to bypass getting the last committed batch before validating operator ID
           .option(StateSourceOptions.BATCH_ID, 0)
           .load(tempDir.getAbsolutePath)
       }
+      checkError(exc, "STDS_INVALID_OPTION_VALUE.IS_NEGATIVE", "42616",
+        Map("optionName" -> StateSourceOptions.OPERATOR_ID))
     }
   }
 
   test("ERROR: batch ID specified to negative") {
     withTempDir { tempDir =>
-      intercept[IllegalArgumentException] {
+      val exc = intercept[StateDataSourceInvalidOptionValueIsNegative] {
         spark.read.format("statestore")
           .option(StateSourceOptions.BATCH_ID, -1)
           .load(tempDir.getAbsolutePath)
       }
+      checkError(exc, "STDS_INVALID_OPTION_VALUE.IS_NEGATIVE", "42616",
+        Map("optionName" -> StateSourceOptions.BATCH_ID))
     }
   }
 
   test("ERROR: store name is empty") {
     withTempDir { tempDir =>
-      intercept[IllegalArgumentException] {
+      val exc = intercept[StateDataSourceInvalidOptionValueIsEmpty] {
         spark.read.format("statestore")
           .option(StateSourceOptions.STORE_NAME, "")
           // trick to bypass getting the last committed batch before validating operator ID
           .option(StateSourceOptions.BATCH_ID, 0)
           .load(tempDir.getAbsolutePath)
       }
+      checkError(exc, "STDS_INVALID_OPTION_VALUE.IS_EMPTY", "42616",
+        Map("optionName" -> StateSourceOptions.STORE_NAME))
     }
   }
 
   test("ERROR: invalid value for joinSide option") {
     withTempDir { tempDir =>
-      intercept[IllegalArgumentException] {
+      val exc = intercept[StateDataSourceInvalidOptionValue] {
         spark.read.format("statestore")
           .option(StateSourceOptions.JOIN_SIDE, "both")
           // trick to bypass getting the last committed batch before validating operator ID
           .option(StateSourceOptions.BATCH_ID, 0)
           .load(tempDir.getAbsolutePath)
       }
+      checkError(exc, "STDS_INVALID_OPTION_VALUE.WITH_MESSAGE", "42616",
+        Map(
+          "optionName" -> StateSourceOptions.JOIN_SIDE,
+          "message" -> "Valid values are left,right,none"))
     }
   }
 
   test("ERROR: both options `joinSide` and `storeName` are specified") {
     withTempDir { tempDir =>
-      intercept[IllegalArgumentException] {
+      val exc = intercept[StateDataSourceConflictOptions] {
         spark.read.format("statestore")
           .option(StateSourceOptions.JOIN_SIDE, "right")
           .option(StateSourceOptions.STORE_NAME, "right-keyToNumValues")
@@ -166,6 +178,9 @@ class StateDataSourceNegativeTestSuite extends StateDataSourceTestBase {
           .option(StateSourceOptions.BATCH_ID, 0)
           .load(tempDir.getAbsolutePath)
       }
+      checkError(exc, "STDS_CONFLICT_OPTIONS", "42613",
+        Map("options" ->
+          s"['${StateSourceOptions.JOIN_SIDE}', '${StateSourceOptions.STORE_NAME}']"))
     }
   }
 
@@ -270,9 +285,9 @@ class StateDataSourceSQLConfigSuite extends StateDataSourceTestBase {
     checkAnswer(
       resultDf,
       Seq(
-        Row(0, 5, 60, 30, 0), // 0, 10, 20, 30
-        Row(1, 5, 65, 31, 1), // 1, 11, 21, 31
-        Row(2, 5, 70, 32, 2), // 2, 12, 22, 32
+        Row(0, 5, 60, 30, 0), // 0, 0, 10, 20, 30
+        Row(1, 5, 65, 31, 1), // 1, 1, 11, 21, 31
+        Row(2, 5, 70, 32, 2), // 2, 2, 12, 22, 32
         Row(3, 4, 72, 33, 3), // 3, 13, 23, 33
         Row(4, 4, 76, 34, 4), // 4, 14, 24, 34
         Row(5, 4, 80, 35, 5), // 5, 15, 25, 35
@@ -494,6 +509,22 @@ abstract class StateDataSourceReadSuite extends StateDataSourceTestBase with Ass
     }
   }
 
+  test("Session window aggregation") {
+    withTempDir { checkpointDir =>
+      runSessionWindowAggregationQuery(checkpointDir.getAbsolutePath)
+
+      val df = spark.read.format("statestore").load(checkpointDir.toString)
+      checkAnswer(df.selectExpr("key.sessionId", "CAST(key.sessionStartTime AS LONG)",
+        "CAST(value.session_window.start AS LONG)", "CAST(value.session_window.end AS LONG)",
+        "value.sessionId", "value.count"),
+        Seq(Row("hello", 40, 40, 51, "hello", 2),
+          Row("spark", 40, 40, 50, "spark", 1),
+          Row("streaming", 40, 40, 51, "streaming", 2),
+          Row("world", 40, 40, 51, "world", 2),
+          Row("structured", 41, 41, 51, "structured", 1)))
+    }
+  }
+
   test("flatMapGroupsWithState, state ver 1") {
     testFlatMapGroupsWithState(1)
   }
@@ -656,7 +687,7 @@ abstract class StateDataSourceReadSuite extends StateDataSourceTestBase with Ass
     }
   }
 
-  test("metadata column") {
+  test("partition_id column") {
     withTempDir { tempDir =>
       import testImplicits._
       val stream = MemoryStream[Int]
@@ -681,14 +712,11 @@ abstract class StateDataSourceReadSuite extends StateDataSourceTestBase with Ass
         // skip version and operator ID to test out functionalities
         .load()
 
-      assert(!stateReadDf.schema.exists(_.name == "_partition_id"),
-      "metadata column should not be exposed until it is explicitly specified!")
-
       val numShufflePartitions = spark.conf.get(SQLConf.SHUFFLE_PARTITIONS)
 
       val resultDf = stateReadDf
-        .selectExpr("key.value AS key_value", "value.count AS value_count", "_partition_id")
-        .where("_partition_id % 2 = 0")
+        .selectExpr("key.value AS key_value", "value.count AS value_count", "partition_id")
+        .where("partition_id % 2 = 0")
 
       // NOTE: This is a hash function of distribution for stateful operator.
       val hash = HashPartitioning(
@@ -707,16 +735,11 @@ abstract class StateDataSourceReadSuite extends StateDataSourceTestBase with Ass
     }
   }
 
-  test("metadata column with stream-stream join") {
+  test("partition_id column with stream-stream join") {
     val numShufflePartitions = spark.conf.get(SQLConf.SHUFFLE_PARTITIONS)
 
     withTempDir { tempDir =>
       runStreamStreamJoinQueryWithOneThousandInputs(tempDir.getAbsolutePath)
-
-      def assertPartitionIdColumnIsNotExposedByDefault(df: DataFrame): Unit = {
-        assert(!df.schema.exists(_.name == "_partition_id"),
-          "metadata column should not be exposed until it is explicitly specified!")
-      }
 
       def assertPartitionIdColumn(df: DataFrame): Unit = {
         // NOTE: This is a hash function of distribution for stateful operator.
@@ -728,8 +751,8 @@ abstract class StateDataSourceReadSuite extends StateDataSourceTestBase with Ass
           numShufflePartitions)
         val partIdExpr = hash.partitionIdExpression
 
-        val dfWithPartition = df.selectExpr("key.field0 As key_0", "_partition_id")
-          .where("_partition_id % 2 = 0")
+        val dfWithPartition = df.selectExpr("key.field0 As key_0", "partition_id")
+          .where("partition_id % 2 = 0")
 
         checkAnswer(dfWithPartition,
           Range.inclusive(2, 1000, 2).map { idx =>
@@ -747,8 +770,6 @@ abstract class StateDataSourceReadSuite extends StateDataSourceTestBase with Ass
           .option(StateSourceOptions.PATH, tempDir.getAbsolutePath)
           .option(StateSourceOptions.JOIN_SIDE, side)
           .load()
-
-        assertPartitionIdColumnIsNotExposedByDefault(stateReaderForLeft)
         assertPartitionIdColumn(stateReaderForLeft)
 
         val stateReaderForKeyToNumValues = spark.read
@@ -758,7 +779,7 @@ abstract class StateDataSourceReadSuite extends StateDataSourceTestBase with Ass
             s"$side-keyToNumValues")
           .load()
 
-        assertPartitionIdColumnIsNotExposedByDefault(stateReaderForKeyToNumValues)
+
         assertPartitionIdColumn(stateReaderForKeyToNumValues)
 
         val stateReaderForKeyWithIndexToValue = spark.read
@@ -768,7 +789,6 @@ abstract class StateDataSourceReadSuite extends StateDataSourceTestBase with Ass
             s"$side-keyWithIndexToValue")
           .load()
 
-        assertPartitionIdColumnIsNotExposedByDefault(stateReaderForKeyWithIndexToValue)
         assertPartitionIdColumn(stateReaderForKeyWithIndexToValue)
       }
 

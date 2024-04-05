@@ -30,8 +30,8 @@ from pyspark.errors import (
     AnalysisException,
     PySparkPicklingError,
 )
-from pyspark.files import SparkFiles
-from pyspark.rdd import PythonEvalType
+from pyspark.core.files import SparkFiles
+from pyspark.util import PythonEvalType
 from pyspark.sql.functions import (
     array,
     create_map,
@@ -274,20 +274,21 @@ class BaseUDTFTestsMixin:
         df = self.spark.sql("SELECT * FROM testUDTF(null)")
         self.assertEqual(df.collect(), [Row(a=None)])
 
+    # These are expected error message substrings to be used in test cases below.
+    tooManyPositionalArguments = "too many positional arguments"
+    missingARequiredArgument = "missing a required argument"
+    multipleValuesForArgument = "multiple values for argument"
+
     def test_udtf_with_wrong_num_input(self):
         @udtf(returnType="a: int, b: int")
         class TestUDTF:
             def eval(self, a: int):
                 yield a, a + 1
 
-        with self.assertRaisesRegex(
-            PythonException, r"eval\(\) missing 1 required positional argument: 'a'"
-        ):
+        with self.assertRaisesRegex(PythonException, BaseUDTFTestsMixin.missingARequiredArgument):
             TestUDTF().collect()
 
-        with self.assertRaisesRegex(
-            PythonException, r"eval\(\) takes 2 positional arguments but 3 were given"
-        ):
+        with self.assertRaisesRegex(PythonException, BaseUDTFTestsMixin.tooManyPositionalArguments):
             TestUDTF(lit(1), lit(2)).collect()
 
     def test_udtf_init_with_additional_args(self):
@@ -299,9 +300,7 @@ class BaseUDTFTestsMixin:
             def eval(self, a: int):
                 yield a,
 
-        with self.assertRaisesRegex(
-            PythonException, r"__init__\(\) missing 1 required positional argument: 'a'"
-        ):
+        with self.assertRaisesRegex(PythonException, r".*constructor has more than one argument.*"):
             TestUDTF(lit(1)).show()
 
     def test_udtf_terminate_with_additional_args(self):
@@ -409,7 +408,7 @@ class BaseUDTFTestsMixin:
         )
 
     def test_udtf_cleanup_with_exception_in_eval(self):
-        with tempfile.TemporaryDirectory() as d:
+        with tempfile.TemporaryDirectory(prefix="test_udtf_cleanup_with_exception_in_eval") as d:
             path = os.path.join(d, "file.txt")
 
             @udtf(returnType="x: int")
@@ -438,7 +437,9 @@ class BaseUDTFTestsMixin:
             self.assertEqual(data, "cleanup")
 
     def test_udtf_cleanup_with_exception_in_terminate(self):
-        with tempfile.TemporaryDirectory() as d:
+        with tempfile.TemporaryDirectory(
+            prefix="test_udtf_cleanup_with_exception_in_terminate"
+        ) as d:
             path = os.path.join(d, "file.txt")
 
             @udtf(returnType="x: int")
@@ -943,7 +944,7 @@ class BaseUDTFTestsMixin:
         )
 
     def test_udtf_pickle_error(self):
-        with tempfile.TemporaryDirectory() as d:
+        with tempfile.TemporaryDirectory(prefix="test_udtf_pickle_error") as d:
             file = os.path.join(d, "file.txt")
             file_obj = open(file, "w")
 
@@ -1248,6 +1249,7 @@ class BaseUDTFTestsMixin:
                 assert isinstance(a.dataType, DataType)
                 assert a.value is not None
                 assert a.isTable is False
+                assert a.isConstantExpression is True
                 return AnalyzeResult(StructType().add("a", a.dataType))
 
             def eval(self, a):
@@ -1401,6 +1403,7 @@ class BaseUDTFTestsMixin:
                 assert isinstance(a.dataType, StructType)
                 assert a.value is None
                 assert a.isTable is True
+                assert a.isConstantExpression is False
                 return AnalyzeResult(StructType().add("a", a.dataType[0].dataType))
 
             def eval(self, a: Row):
@@ -1420,6 +1423,7 @@ class BaseUDTFTestsMixin:
             def analyze(a: AnalyzeArgument) -> AnalyzeResult:
                 assert isinstance(a.dataType, StructType)
                 assert a.isTable is True
+                assert a.isConstantExpression is False
                 return AnalyzeResult(a.dataType.add("is_even", BooleanType()))
 
             def eval(self, a: Row):
@@ -1582,8 +1586,9 @@ class BaseUDTFTestsMixin:
 
         with self.assertRaisesRegex(
             AnalysisException,
-            "Output of `analyze` static method of Python UDTFs expects "
-            "a pyspark.sql.udtf.AnalyzeResult but got: <class 'pyspark.sql.types.StringType'>",
+            "'analyze' method expects a result of type pyspark.sql.udtf.AnalyzeResult, "
+            "but instead this method returned a value of type: "
+            "<class 'pyspark.sql.types.StringType'>",
         ):
             func().collect()
 
@@ -1622,25 +1627,16 @@ class BaseUDTFTestsMixin:
             def analyze(a: AnalyzeArgument, b: AnalyzeArgument) -> AnalyzeResult:
                 return AnalyzeResult(StructType().add("a", a.dataType).add("b", b.dataType))
 
-            def eval(self, a):
+            def eval(self, a, b):
                 yield a, a + 1
 
         func = udtf(TestUDTF)
 
-        with self.assertRaisesRegex(
-            AnalysisException, r"analyze\(\) missing 1 required positional argument: 'b'"
-        ):
+        with self.assertRaisesRegex(AnalysisException, r"arguments"):
             func(lit(1)).collect()
 
-        with self.assertRaisesRegex(
-            AnalysisException, r"analyze\(\) takes 2 positional arguments but 3 were given"
-        ):
+        with self.assertRaisesRegex(AnalysisException, r"arguments"):
             func(lit(1), lit(2), lit(3)).collect()
-
-        with self.assertRaisesRegex(
-            PythonException, r"eval\(\) takes 2 positional arguments but 3 were given"
-        ):
-            func(lit(1), lit(2)).collect()
 
     def test_udtf_with_analyze_taking_keyword_arguments(self):
         @udtf
@@ -1660,12 +1656,12 @@ class BaseUDTFTestsMixin:
         assertDataFrameEqual(self.spark.sql("SELECT * FROM test_udtf(a=>1)"), expected)
 
         with self.assertRaisesRegex(
-            AnalysisException, r"analyze\(\) takes 0 positional arguments but 1 was given"
+            AnalysisException, BaseUDTFTestsMixin.tooManyPositionalArguments
         ):
             TestUDTF(lit(1)).collect()
 
         with self.assertRaisesRegex(
-            AnalysisException, r"analyze\(\) takes 0 positional arguments but 2 were given"
+            AnalysisException, BaseUDTFTestsMixin.tooManyPositionalArguments
         ):
             self.spark.sql("SELECT * FROM test_udtf(1, 'x')").collect()
 
@@ -1724,7 +1720,7 @@ class BaseUDTFTestsMixin:
         self.sc.addPyFile(path)
 
     def test_udtf_with_analyze_using_pyfile(self):
-        with tempfile.TemporaryDirectory() as d:
+        with tempfile.TemporaryDirectory(prefix="test_udtf_with_analyze_using_pyfile") as d:
             pyfile_path = os.path.join(d, "my_pyfile.py")
             with open(pyfile_path, "w") as f:
                 f.write("my_func = lambda: 'col1'")
@@ -1761,7 +1757,7 @@ class BaseUDTFTestsMixin:
                     assertDataFrameEqual(df, [Row(col1=10), Row(col1=100)])
 
     def test_udtf_with_analyze_using_zipped_package(self):
-        with tempfile.TemporaryDirectory() as d:
+        with tempfile.TemporaryDirectory(prefix="test_udtf_with_analyze_using_zipped_package") as d:
             package_path = os.path.join(d, "my_zipfile")
             os.mkdir(package_path)
             pyfile_path = os.path.join(package_path, "__init__.py")
@@ -1804,7 +1800,7 @@ class BaseUDTFTestsMixin:
         self.sc.addArchive(path)
 
     def test_udtf_with_analyze_using_archive(self):
-        with tempfile.TemporaryDirectory() as d:
+        with tempfile.TemporaryDirectory(prefix="test_udtf_with_analyze_using_archive") as d:
             archive_path = os.path.join(d, "my_archive")
             os.mkdir(archive_path)
             pyfile_path = os.path.join(archive_path, "my_file.txt")
@@ -1851,7 +1847,7 @@ class BaseUDTFTestsMixin:
         self.sc.addFile(path)
 
     def test_udtf_with_analyze_using_file(self):
-        with tempfile.TemporaryDirectory() as d:
+        with tempfile.TemporaryDirectory(prefix="test_udtf_with_analyze_using_file") as d:
             file_path = os.path.join(d, "my_file.txt")
             with open(file_path, "w") as f:
                 f.write("col1")
@@ -1924,14 +1920,10 @@ class BaseUDTFTestsMixin:
         with self.assertRaisesRegex(AnalysisException, "UNEXPECTED_POSITIONAL_ARGUMENT"):
             self.spark.sql("SELECT * FROM test_udtf(a => 10, 'x')").show()
 
-        with self.assertRaisesRegex(
-            PythonException, r"eval\(\) got an unexpected keyword argument 'c'"
-        ):
+        with self.assertRaisesRegex(PythonException, BaseUDTFTestsMixin.missingARequiredArgument):
             self.spark.sql("SELECT * FROM test_udtf(c => 'x')").show()
 
-        with self.assertRaisesRegex(
-            PythonException, r"eval\(\) got multiple values for argument 'a'"
-        ):
+        with self.assertRaisesRegex(PythonException, BaseUDTFTestsMixin.multipleValuesForArgument):
             self.spark.sql("SELECT * FROM test_udtf(10, a => 100)").show()
 
     def test_udtf_with_kwargs(self):
@@ -1970,7 +1962,8 @@ class BaseUDTFTestsMixin:
             def analyze(**kwargs: AnalyzeArgument) -> AnalyzeResult:
                 assert isinstance(kwargs["a"].dataType, IntegerType)
                 assert kwargs["a"].value == 10
-                assert not kwargs["a"].isTable
+                assert kwargs["a"].isTable is False
+                assert kwargs["a"].isConstantExpression is True
                 assert isinstance(kwargs["b"].dataType, StringType)
                 assert kwargs["b"].value == "x"
                 assert not kwargs["b"].isTable
@@ -2032,6 +2025,7 @@ class BaseUDTFTestsMixin:
                 assert isinstance(a.dataType, IntegerType)
                 assert a.value == 10
                 assert not a.isTable
+                assert a.isConstantExpression is True
                 if b is not None:
                     assert isinstance(b.dataType, StringType)
                     assert b.value == "z"

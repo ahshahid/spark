@@ -93,11 +93,11 @@ class HiveSessionStateBuilder(
         new ResolveSessionCatalog(catalogManager) +:
         ResolveWriteToStream +:
         new EvalSubqueriesForTimeTravel +:
+        new DetermineTableStats(session) +:
         customResolutionRules
 
     override val postHocResolutionRules: Seq[Rule[LogicalPlan]] =
       DetectAmbiguousSelfJoin +:
-        new DetermineTableStats(session) +:
         RelationConversions(catalog) +:
         QualifyLocationWithWarehouse(catalog) +:
         PreprocessTableCreation(catalog) +:
@@ -113,6 +113,7 @@ class HiveSessionStateBuilder(
         PreReadCheck +:
         TableCapabilityCheck +:
         CommandCheck +:
+        CollationCheck +:
         customCheckRules
   }
 
@@ -202,8 +203,11 @@ object HiveUDFExpressionBuilder extends SparkUDFExpressionBuilder {
           case i: InvocationTargetException => i.getCause
           case o => o
         }
-        val errorMsg = s"No handler for UDF/UDAF/UDTF '${clazz.getCanonicalName}': $e"
-        val analysisException = new AnalysisException(errorMsg)
+        val analysisException = new AnalysisException(
+          errorClass = "_LEGACY_ERROR_TEMP_3084",
+          messageParameters = Map(
+            "clazz" -> clazz.getCanonicalName,
+            "e" -> e.toString))
         analysisException.setStackTrace(e.getStackTrace)
         throw analysisException
     }
