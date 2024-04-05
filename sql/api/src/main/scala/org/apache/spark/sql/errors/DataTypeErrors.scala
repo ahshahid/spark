@@ -27,13 +27,11 @@ import org.apache.spark.unsafe.types.UTF8String
 /**
  * Object for grouping error messages from (most) exceptions thrown during query execution.
  * This does not include exceptions thrown during the eager execution of commands, which are
- * grouped into [[QueryCompilationErrors]].
+ * grouped into [[CompilationErrors]].
  */
 private[sql] object DataTypeErrors extends DataTypeErrorsBase {
   def unsupportedOperationExceptionError(): SparkUnsupportedOperationException = {
-    new SparkUnsupportedOperationException(
-      errorClass = "_LEGACY_ERROR_TEMP_2225",
-      messageParameters = Map.empty)
+    new SparkUnsupportedOperationException("_LEGACY_ERROR_TEMP_2225")
   }
 
   def decimalPrecisionExceedsMaxPrecisionError(
@@ -263,10 +261,14 @@ private[sql] object DataTypeErrors extends DataTypeErrorsBase {
       messageParameters = Map("raw" -> s"'$raw'"))
   }
 
-  def fieldIndexOnRowWithoutSchemaError(): SparkUnsupportedOperationException = {
+  def fieldIndexOnRowWithoutSchemaError(fieldName: String): SparkUnsupportedOperationException = {
     new SparkUnsupportedOperationException(
-      errorClass = "_LEGACY_ERROR_TEMP_2231",
-      messageParameters = Map.empty)
+      errorClass = "UNSUPPORTED_CALL.FIELD_INDEX",
+      messageParameters = Map(
+        "methodName" -> "fieldIndex",
+        "className" -> "Row",
+        "fieldName" -> toSQLId(fieldName))
+    )
   }
 
   def valueIsNullError(index: Int): Throwable = {

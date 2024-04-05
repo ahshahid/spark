@@ -30,6 +30,7 @@ import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
 
 import org.apache.spark._
+import org.apache.spark.api.python.PythonFunction.PythonAccumulator
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.{BUFFER_SIZE, EXECUTOR_CORES, Python}
 import org.apache.spark.internal.config.Python._
@@ -57,6 +58,8 @@ private[spark] object PythonEvalType {
   val SQL_COGROUPED_MAP_PANDAS_UDF = 206
   val SQL_MAP_ARROW_ITER_UDF = 207
   val SQL_GROUPED_MAP_PANDAS_UDF_WITH_STATE = 208
+  val SQL_GROUPED_MAP_ARROW_UDF = 209
+  val SQL_COGROUPED_MAP_ARROW_UDF = 210
 
   val SQL_TABLE_UDF = 300
   val SQL_ARROW_TABLE_UDF = 301
@@ -74,6 +77,8 @@ private[spark] object PythonEvalType {
     case SQL_COGROUPED_MAP_PANDAS_UDF => "SQL_COGROUPED_MAP_PANDAS_UDF"
     case SQL_MAP_ARROW_ITER_UDF => "SQL_MAP_ARROW_ITER_UDF"
     case SQL_GROUPED_MAP_PANDAS_UDF_WITH_STATE => "SQL_GROUPED_MAP_PANDAS_UDF_WITH_STATE"
+    case SQL_GROUPED_MAP_ARROW_UDF => "SQL_GROUPED_MAP_ARROW_UDF"
+    case SQL_COGROUPED_MAP_ARROW_UDF => "SQL_COGROUPED_MAP_ARROW_UDF"
     case SQL_TABLE_UDF => "SQL_TABLE_UDF"
     case SQL_ARROW_TABLE_UDF => "SQL_ARROW_TABLE_UDF"
   }
@@ -142,10 +147,10 @@ private[spark] abstract class BasePythonRunner[IN, OUT](
     }.getOrElse("pyspark.worker")
 
   // TODO: support accumulator in multiple UDF
-  protected val accumulator: PythonAccumulatorV2 = funcs.head.funcs.head.accumulator
+  protected val accumulator: PythonAccumulator = funcs.head.funcs.head.accumulator
 
   // Python accumulator is always set in production except in tests. See SPARK-27893
-  private val maybeAccumulator: Option[PythonAccumulatorV2] = Option(accumulator)
+  private val maybeAccumulator: Option[PythonAccumulator] = Option(accumulator)
 
   // Expose a ServerSocket to support method calls via socket from Python side. Only relevant for
   // for tasks that are a part of barrier stage, refer [[BarrierTaskContext]] for details.
@@ -378,7 +383,7 @@ private[spark] abstract class BasePythonRunner[IN, OUT](
         resources.foreach { case (k, v) =>
           PythonRDD.writeUTF(k, dataOut)
           PythonRDD.writeUTF(v.name, dataOut)
-          dataOut.writeInt(v.addresses.size)
+          dataOut.writeInt(v.addresses.length)
           v.addresses.foreach { case addr =>
             PythonRDD.writeUTF(addr, dataOut)
           }

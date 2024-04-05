@@ -144,8 +144,14 @@ private[sql] object CatalogV2Implicits {
   }
 
   implicit class IdentifierHelper(ident: Identifier) {
+    /* Quote the identifier if needed. */
     def quoted: String = {
       QuotingUtils.quoted(ident)
+    }
+
+    /* Always quote the identifier. */
+    def fullyQuoted: String = {
+      QuotingUtils.fullyQuoted(ident)
     }
 
     def original: String = ident.namespace() :+ ident.name() mkString "."
@@ -162,6 +168,10 @@ private[sql] object CatalogV2Implicits {
       case ns if ns.isEmpty => FunctionIdentifier(ident.name())
       case Array(dbName) => FunctionIdentifier(ident.name(), Some(dbName))
       case _ => throw QueryCompilationErrors.identifierTooManyNamePartsError(original)
+    }
+
+    def toQualifiedNameParts(catalog: CatalogPlugin): Seq[String] = {
+      (catalog.name() +: ident.namespace() :+ ident.name()).toImmutableArraySeq
     }
   }
 
