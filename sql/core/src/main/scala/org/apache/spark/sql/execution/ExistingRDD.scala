@@ -154,7 +154,7 @@ case class LogicalRDD(
       new ConstraintSet()
     } else {
       ExpressionSet()
-    })
+    }).filterNot(SubqueryExpression.hasSubquery)
 }
 
 object LogicalRDD extends Logging {
