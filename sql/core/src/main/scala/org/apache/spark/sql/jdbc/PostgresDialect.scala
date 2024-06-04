@@ -17,11 +17,15 @@
 
 package org.apache.spark.sql.jdbc
 
-import java.sql.{Connection, Date, SQLException, Timestamp, Types}
+import java.sql.{Connection, Date, ResultSetMetaData, SQLException, Timestamp, Types}
 import java.time.{LocalDateTime, ZoneOffset}
 import java.util
 import java.util.Locale
 
+import scala.util.Using
+
+import org.apache.spark.internal.LogKeys.COLUMN_NAME
+import org.apache.spark.internal.MDC
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.SQLConfHelper
 import org.apache.spark.sql.catalyst.analysis.{IndexAlreadyExistsException, NonEmptyNamespaceException, NoSuchIndexException}
@@ -57,8 +61,8 @@ private case class PostgresDialect() extends JdbcDialect with SQLConfHelper {
         // money type seems to be broken but one workaround is to handle it as string.
         // See SPARK-34333 and https://github.com/pgjdbc/pgjdbc/issues/100
         Some(StringType)
-      case Types.TIMESTAMP
-        if "timestamptz".equalsIgnoreCase(typeName) =>
+      case Types.TIMESTAMP if "timestamptz".equalsIgnoreCase(typeName) &&
+          !conf.legacyPostgresDatetimeMappingEnabled =>
         // timestamptz represents timestamp with time zone, currently it maps to Types.TIMESTAMP.
         // We need to change to Types.TIMESTAMP_WITH_TIMEZONE if the upstream changes.
         Some(TimestampType)
@@ -74,7 +78,16 @@ private case class PostgresDialect() extends JdbcDialect with SQLConfHelper {
       case _ if "text".equalsIgnoreCase(typeName) => Some(StringType) // sqlType is Types.VARCHAR
       case Types.ARRAY =>
         // postgres array type names start with underscore
-        toCatalystType(typeName.drop(1), size, md).map(ArrayType(_))
+        val elementType = toCatalystType(typeName.drop(1), size, md)
+        elementType.map { et =>
+          val metadata = md.build()
+          val dim = if (metadata.contains("arrayDimension")) {
+            metadata.getLong("arrayDimension").toInt
+          } else {
+            1
+          }
+          (0 until dim).foldLeft(et)((acc, _) => ArrayType(acc))
+        }
       case _ => None
     }
   }
@@ -136,6 +149,8 @@ private case class PostgresDialect() extends JdbcDialect with SQLConfHelper {
     case FloatType => Some(JdbcType("FLOAT4", Types.FLOAT))
     case DoubleType => Some(JdbcType("FLOAT8", Types.DOUBLE))
     case ShortType | ByteType => Some(JdbcType("SMALLINT", Types.SMALLINT))
+    case TimestampType if !conf.legacyPostgresDatetimeMappingEnabled =>
+      Some(JdbcType("TIMESTAMP WITH TIME ZONE", Types.TIMESTAMP))
     case t: DecimalType => Some(
       JdbcType(s"NUMERIC(${t.precision},${t.scale})", java.sql.Types.NUMERIC))
     case ArrayType(et, _) if et.isInstanceOf[AtomicType] || et.isInstanceOf[ArrayType] =>
@@ -329,6 +344,38 @@ private case class PostgresDialect() extends JdbcDialect with SQLConfHelper {
       case -9223372036832400000L =>
         new Date(LocalDateTime.of(1, 1, 1, 0, 0, 0).toInstant(ZoneOffset.UTC).toEpochMilli)
       case _ => d
+    }
+  }
+
+  override def updateExtraColumnMeta(
+      conn: Connection,
+      rsmd: ResultSetMetaData,
+      columnIdx: Int,
+      metadata: MetadataBuilder): Unit = {
+    rsmd.getColumnType(columnIdx) match {
+      case Types.ARRAY =>
+        val tableName = rsmd.getTableName(columnIdx)
+        val columnName = rsmd.getColumnName(columnIdx)
+        val query =
+          s"""
+             |SELECT pg_attribute.attndims
+             |FROM pg_attribute
+             |  JOIN pg_class ON pg_attribute.attrelid = pg_class.oid
+             |  JOIN pg_namespace ON pg_class.relnamespace = pg_namespace.oid
+             |WHERE pg_class.relname = '$tableName' and pg_attribute.attname = '$columnName'
+             |""".stripMargin
+        try {
+          Using.resource(conn.createStatement()) { stmt =>
+            Using.resource(stmt.executeQuery(query)) { rs =>
+              if (rs.next()) metadata.putLong("arrayDimension", rs.getLong(1))
+            }
+          }
+        } catch {
+          case e: SQLException =>
+            logWarning(
+              log"Failed to get array dimension for column ${MDC(COLUMN_NAME, columnName)}", e)
+        }
+      case _ =>
     }
   }
 }

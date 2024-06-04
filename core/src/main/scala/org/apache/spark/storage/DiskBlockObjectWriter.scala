@@ -25,7 +25,7 @@ import java.util.zip.Checksum
 import org.apache.spark.SparkException
 import org.apache.spark.errors.SparkCoreErrors
 import org.apache.spark.internal.{Logging, MDC}
-import org.apache.spark.internal.LogKey.{ERROR, PATH}
+import org.apache.spark.internal.LogKeys._
 import org.apache.spark.io.MutableCheckedOutputStream
 import org.apache.spark.serializer.{SerializationStream, SerializerInstance, SerializerManager}
 import org.apache.spark.shuffle.ShuffleWriteMetricsReporter
@@ -271,7 +271,8 @@ private[spark] class DiskBlockObjectWriter(
           logError(log"Exception occurred while reverting partial writes to file "
             + log"${MDC(PATH, file)}, ${MDC(ERROR, ce.getMessage)}")
         case e: Exception =>
-          logError("Uncaught exception while reverting partial writes to file " + file, e)
+          logError(
+            log"Uncaught exception while reverting partial writes to file ${MDC(PATH, file)}", e)
       } finally {
         if (truncateStream != null) {
           truncateStream.close()
@@ -296,7 +297,7 @@ private[spark] class DiskBlockObjectWriter(
       }
     } {
       if (!Files.deleteIfExists(file.toPath)) {
-        logWarning(s"Error deleting $file")
+        logWarning(log"Error deleting ${MDC(FILE_NAME, file)}")
       }
     }
   }
