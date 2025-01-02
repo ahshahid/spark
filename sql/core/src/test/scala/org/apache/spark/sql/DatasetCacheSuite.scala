@@ -385,7 +385,7 @@ class DatasetCacheSuite extends QueryTest
       }
     }
   }
-  
+
   test("SPARK-50682: inner Alias should be canonicalized") {
     // Put a metadata in the Alias so that it won't be removed by the analyzer.
     val metadata = Metadata.fromJson("""{"k": "v"}""")
@@ -399,7 +399,7 @@ class DatasetCacheSuite extends QueryTest
     // Same with df1 except for the Alias metadata
     val df3 = spark.range(5).select(struct($"id".as("name", metadata2)))
     assert(!df3.queryExecution.executedPlan.exists(_.isInstanceOf[InMemoryTableScanExec]))
-  }  
+  }
 
   protected def checkIMRUseAndInvalidation(
       baseDfCreator: () => DataFrame,
