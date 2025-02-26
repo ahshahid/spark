@@ -17,11 +17,11 @@
 
 package org.apache.spark.sql.execution.datasources.v2
 
-import org.apache.spark.sql.Dataset
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.RelationWrapper
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.classic.Dataset
 import org.apache.spark.sql.connector.catalog.SupportsWrite
 import org.apache.spark.sql.connector.write.V1Write
 import org.apache.spark.sql.execution.{SparkPlan, SQLExecution}
