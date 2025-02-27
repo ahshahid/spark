@@ -143,13 +143,34 @@ class ConstraintSet private(
 
   def this() = this(mutable.Buffer.empty[Expression])
 
+  override protected def fromSpecific(coll: IterableOnce[Expression]): ExpressionSet = {
+    val set = new ConstraintSet()
+    coll.iterator.foreach(set.add)
+    set
+  }
+
+  override def empty: ConstraintSet = new ConstraintSet()
+
+  override protected def newSpecificBuilder: mutable.Builder[Expression, ConstraintSet] =
+    new mutable.Builder[Expression, ConstraintSet] {
+      var expr_set: ConstraintSet = new ConstraintSet()
+
+      def clear(): Unit = expr_set = new ConstraintSet()
+
+      def result(): ConstraintSet = expr_set
+
+      def addOne(expr: Expression): this.type = {
+        expr_set.add(expr)
+        this
+      }
+    }
   override def clone(): ConstraintSet = new ConstraintSet(
     baseSet.clone(),
     originals.clone(),
     this.attribRefBasedEquivalenceList.map(_.clone()),
     this.expressionBasedEquivalenceList.map(_.clone()))
 
-  override def union(that: ExpressionSet): ExpressionSet = {
+  override def unionExpressionSet(that: ExpressionSet): ExpressionSet = {
     def commonEquivList[T <: Expression](thisList: Seq[mutable.Buffer[T]],
         thatList: Seq[mutable.Buffer[T]]): Seq[mutable.Buffer[T]] = {
       val zerothElems = thisList.map(_.head)

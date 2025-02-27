@@ -1543,7 +1543,8 @@ object InferFiltersFromConstraints extends Rule[LogicalPlan]
 
   private def inferNewFilter(plan: LogicalPlan, constraints: ExpressionSet): LogicalPlan = {
     val newPredicates =
-      constraints.union(constructIsNotNullConstraints(constraints, plan.output)).filter(c =>
+      constraints.unionExpressionSet(constructIsNotNullConstraints(constraints, plan.output)).
+        filter(c =>
           c.references.nonEmpty && c.references.subsetOf(plan.outputSet) && c.deterministic
         ) -- plan.constraints
     if (newPredicates.isEmpty) {

@@ -361,7 +361,7 @@ case class Filter(condition: Expression, child: LogicalPlan)
         case _ => Seq.empty
       }.toSet
     val netPreds = predicates.filterNot(nullSafePredsToRemove.contains)
-    child.constraints.union(ExpressionSet(netPreds))
+    child.constraints.unionExpressionSet(ExpressionSet(netPreds))
   }
 
   override protected def withNewChildInternal(newChild: LogicalPlan): Filter =
@@ -412,7 +412,7 @@ case class Intersect(
   override def metadataOutput: Seq[Attribute] = Nil
 
   override lazy val validConstraints: ExpressionSet =
-    leftConstraints.union(rightConstraints)
+    leftConstraints.unionExpressionSet(rightConstraints)
 
   override def maxRows: Option[Long] = {
     if (children.exists(_.maxRows.isEmpty)) {
@@ -737,15 +737,15 @@ case class Join(
     joinType match {
       case _: InnerLike if condition.isDefined =>
         left.constraints
-          .union(right.constraints)
-          .union(ExpressionSet(splitConjunctivePredicates(condition.get)))
+          .unionExpressionSet(right.constraints)
+          .unionExpressionSet(ExpressionSet(splitConjunctivePredicates(condition.get)))
       case LeftSemi if condition.isDefined =>
         left.constraints
-          .union(ExpressionSet(splitConjunctivePredicates(condition.get)))
+          .unionExpressionSet(ExpressionSet(splitConjunctivePredicates(condition.get)))
       case j: ExistenceJoin =>
         left.constraints
       case _: InnerLike =>
-        left.constraints.union(right.constraints)
+        left.constraints.unionExpressionSet(right.constraints)
       case LeftExistence(_) =>
         left.constraints
       case LeftOuter | LeftSingle =>

@@ -70,7 +70,30 @@ object ExpressionSet {
 class ExpressionSet protected(
     protected val baseSet: mutable.Set[Expression] = new mutable.HashSet(),
     protected val originals: mutable.Buffer[Expression] = new ArrayBuffer)
-  extends Iterable[Expression] {
+  extends scala.collection.Set[Expression]
+    with scala.collection.SetOps[Expression, scala.collection.Set, ExpressionSet] {
+
+  override protected def fromSpecific(coll: IterableOnce[Expression]): ExpressionSet = {
+    val set = new ExpressionSet()
+    coll.iterator.foreach(set.add)
+    set
+  }
+
+  override def empty: ExpressionSet = new ExpressionSet()
+
+  override protected def newSpecificBuilder: mutable.Builder[Expression, ExpressionSet] =
+    new mutable.Builder[Expression, ExpressionSet] {
+      var expr_set: ExpressionSet = new ExpressionSet()
+
+      def clear(): Unit = expr_set = new ExpressionSet()
+
+      def result(): ExpressionSet = expr_set
+
+      def addOne(expr: Expression): this.type = {
+        expr_set.add(expr)
+        this
+      }
+    }
 
   protected def add(e: Expression): Unit = if (!e.deterministic) {
       originals += e
@@ -102,29 +125,44 @@ class ExpressionSet protected(
     newOriginals: mutable.Buffer[Expression] = new ArrayBuffer): ExpressionSet =
     new ExpressionSet(newBaseSet, newOriginals)
 
-  def +(elem: Expression): ExpressionSet = {
+  override def +(elem: Expression): ExpressionSet = {
     val newSet = clone()
     newSet.add(this.convertToCanonicalizedIfRequired(elem))
     newSet
   }
 
-  def ++(elems: Iterable[Expression]): ExpressionSet = {
-    val newSet = clone()
-    elems.foreach(ele => newSet.add(this.convertToCanonicalizedIfRequired(ele)))
-    newSet
-  }
-
-  def -(elem: Expression): ExpressionSet = {
+  override def -(elem: Expression): ExpressionSet = {
     val newSet = clone()
     newSet.remove(this.convertToCanonicalizedIfRequired(elem))
     newSet
   }
 
-  def --(elems: Iterable[Expression]): ExpressionSet = {
+  override def --(elems: IterableOnce[Expression]): ExpressionSet = {
     val newSet = clone()
-    elems.foreach(ele => newSet.remove(this.convertToCanonicalizedIfRequired(ele)))
+    elems.iterator.foreach(ele => newSet.remove(this.convertToCanonicalizedIfRequired(ele)))
     newSet
   }
+
+  override def concat(that: IterableOnce[Expression]): ExpressionSet = {
+    val newSet = clone()
+    that.iterator.foreach(newSet.add)
+    newSet
+  }
+
+  override def diff(that: scala.collection.Set[Expression]): ExpressionSet = this -- that
+
+  override def iterator: Iterator[Expression] = originals.iterator
+
+  override def equals(obj: Any): Boolean = obj match {
+    case other: ExpressionSet => this.baseSet == other.baseSet
+
+    case _ => false
+  }
+
+  override def hashCode(): Int = baseSet.hashCode()
+
+  override def clone(): ExpressionSet = new ExpressionSet(baseSet.clone(), originals.clone())
+
 
   def map(f: Expression => Expression): ExpressionSet = {
     val newSet = this.constructNew()
@@ -138,31 +176,12 @@ class ExpressionSet protected(
     newSet
   }
 
-  def union(that: ExpressionSet): ExpressionSet = {
+  def unionExpressionSet(that: ExpressionSet): ExpressionSet = {
     val newSet = clone()
     that.iterator.foreach(newSet.add)
     newSet
   }
 
-  def subsetOf(that: ExpressionSet): Boolean = this.iterator.forall(that.contains)
-
-  def intersect(that: ExpressionSet): ExpressionSet = this.filter(that.contains)
-
-  def diff(that: ExpressionSet): ExpressionSet = this -- that
-
-  override def iterator: Iterator[Expression] = originals.iterator
-
-  def apply(elem: Expression): Boolean = this.contains(elem)
-
-  override def equals(obj: Any): Boolean = obj match {
-    case other: ExpressionSet => this.baseSet == other.baseSet
-
-    case _ => false
-  }
-
-  override def hashCode(): Int = baseSet.hashCode()
-
-  override def clone(): ExpressionSet = new ExpressionSet(baseSet.clone(), originals.clone())
 
   def convertToCanonicalizedIfRequired(ele: Expression): Expression = ele
 
@@ -174,7 +193,7 @@ class ExpressionSet protected(
       inputAttribs: Seq[Attribute], projectList: Seq[NamedExpression],
       oldAliasedConstraintsCreator: Option[Seq[NamedExpression] => ExpressionSet]): ExpressionSet =
     oldAliasedConstraintsCreator.map(aliasCreator =>
-      this.union(aliasCreator(projectList))).getOrElse(this)
+      this.unionExpressionSet(aliasCreator(projectList))).getOrElse(this)
 
   def attributesRewrite(mapping: AttributeMap[Attribute]): ExpressionSet =
     ExpressionSet(this.map(_ transform {

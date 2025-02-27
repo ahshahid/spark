@@ -31,8 +31,8 @@ trait QueryPlanConstraints extends ConstraintHelper { self: LogicalPlan =>
   lazy val constraints: ExpressionSet =
     if (conf.constraintPropagationEnabled) {
       val newConstraints = validConstraints
-        .union(inferAdditionalConstraints(validConstraints))
-        .union(constructIsNotNullConstraints(
+        .unionExpressionSet(inferAdditionalConstraints(validConstraints))
+        .unionExpressionSet(constructIsNotNullConstraints(
           validConstraints.getConstraintsWithDecanonicalizedNullIntolerant, output))
       // Removed the criteria  c.references.nonEmpty as it was causing a constraint of the
       // of the form literal true or false being eliminated, causing idempotency check failure
