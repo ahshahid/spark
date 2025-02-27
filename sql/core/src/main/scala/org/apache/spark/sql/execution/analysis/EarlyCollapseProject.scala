@@ -20,11 +20,11 @@ package org.apache.spark.sql.execution.analysis
 import scala.collection.mutable
 import scala.util.{Failure, Success, Try}
 
-import org.apache.spark.sql.Dataset
 import org.apache.spark.sql.catalyst.analysis.{SQLFunctionExpression, SQLScalarFunction}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeMap, AttributeReference, Expression, NamedExpression, UserDefinedExpression}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.classic
 import org.apache.spark.sql.types.{Metadata, MetadataBuilder}
 import org.apache.spark.util.Utils
 
@@ -175,10 +175,10 @@ private[sql] object EarlyCollapseProject extends Rule[LogicalPlan] {
           val newDroppedList = droppedNamedExprs ++ prevDroppedColsFinal
           newProject.copyTagsFrom(p)
           // remove the datasetId copied from current P due to above copy
-          newProject.unsetTagValue(Dataset.DATASET_ID_TAG)
+          newProject.unsetTagValue(classic.Dataset.DATASET_ID_TAG)
           // use the dataset id of the incoming new project
-          newP.getTagValue(Dataset.DATASET_ID_TAG).foreach(map =>
-            newProject.setTagValue(Dataset.DATASET_ID_TAG, map.clone()))
+          newP.getTagValue(classic.Dataset.DATASET_ID_TAG).foreach(map =>
+            newProject.setTagValue(classic.Dataset.DATASET_ID_TAG, map.clone()))
           newProject.unsetTagValue(LogicalPlan.DROPPED_NAMED_EXPRESSIONS)
           if (newDroppedList.nonEmpty) {
             newProject.setTagValue(LogicalPlan.DROPPED_NAMED_EXPRESSIONS, newDroppedList)
