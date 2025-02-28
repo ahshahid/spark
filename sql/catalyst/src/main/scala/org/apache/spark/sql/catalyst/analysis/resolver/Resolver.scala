@@ -18,10 +18,11 @@
 package org.apache.spark.sql.catalyst.analysis.resolver
 
 import scala.collection.mutable.ArrayBuffer
+
 import org.apache.spark.SparkException
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.EvaluateUnresolvedInlineTable
-import org.apache.spark.sql.catalyst.analysis.{AnalysisErrorAt, FunctionResolution, MultiInstanceRelation, RelationResolution, ResolvedInlineTable, UnresolvedInlineTable, UnresolvedRelation, UnresolvedSubqueryColumnAliases, withPosition}
+import org.apache.spark.sql.catalyst.analysis.{withPosition, AnalysisErrorAt, FunctionResolution, MultiInstanceRelation, RelationResolution, ResolvedInlineTable, UnresolvedInlineTable, UnresolvedRelation, UnresolvedSubqueryColumnAliases}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeSet, Expression, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.logical.{AnalysisHelper, CTERelationDef, CTERelationRef, Distinct, Filter, GlobalLimit, LeafNode, LocalLimit, LocalRelation, LogicalPlan, OneRowRelation, Project, SkipDedupRelRuleMarker, SubqueryAlias, Union, UnresolvedWith, View, WithCTE}
 import org.apache.spark.sql.catalyst.trees.CurrentOrigin.withOrigin
