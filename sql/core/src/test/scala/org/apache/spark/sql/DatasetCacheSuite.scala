@@ -20,7 +20,7 @@ package org.apache.spark.sql
 import org.scalatest.concurrent.TimeLimits
 import org.scalatest.time.SpanSugar._
 
-import org.apache.spark.sql.execution.SparkPlan
+import org.apache.spark.sql.execution.{ProjectExec, SparkPlan}
 import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanHelper
 import org.apache.spark.sql.execution.columnar.{InMemoryRelation, InMemoryTableScanExec}
 import org.apache.spark.sql.functions._
@@ -251,10 +251,25 @@ class DatasetCacheSuite extends QueryTest
     val df2LimitInnerPlan = df2Limit.queryExecution.withCachedData.collectFirst {
       case i: InMemoryRelation => i.cacheBuilder.cachedPlan
     }
-    // Verify that df2's cache has been re-cached, with a new physical plan rid of dependency
+
+    // This assertion is in-correct for this branch,as df2 would be able to use the IMR
+    // of the cached df1.
+
+    // Wrong assertion: Verify that df2's cache has been re-cached, with a new physical
+    // plan rid of dependency
     // on df, since df2's cache had not been loaded before df.unpersist().
-    assert(df2LimitInnerPlan.isDefined &&
+    /*
+      assert(df2LimitInnerPlan.isDefined &&
       !df2LimitInnerPlan.get.exists(_.isInstanceOf[InMemoryTableScanExec]))
+    */
+    assert(df2LimitInnerPlan.isDefined &&
+      df2LimitInnerPlan.get.exists(_.isInstanceOf[InMemoryTableScanExec]))
+    // check projection matches df1.
+    val sparkProjInImr = df2LimitInnerPlan.get.find(_.isInstanceOf[InMemoryTableScanExec])
+      .get.asInstanceOf[InMemoryTableScanExec].relation.cachedPlan.collectFirst {
+      case p: ProjectExec => p
+    }
+    assert(sparkProjInImr.isDefined && sparkProjInImr.get.projectList.exists(_.name == "b"))
   }
 
   test("SPARK-27739 Save stats from optimized plan") {
