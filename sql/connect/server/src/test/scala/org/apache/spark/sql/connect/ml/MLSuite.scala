@@ -25,6 +25,7 @@ import org.apache.spark.ml.linalg.{Vectors, VectorUDT}
 import org.apache.spark.ml.param._
 import org.apache.spark.ml.util.Identifiable
 import org.apache.spark.sql.connect.SparkConnectTestUtils
+import org.apache.spark.sql.connect.config.Connect
 import org.apache.spark.sql.connect.service.SessionHolder
 
 trait FakeArrayParams extends Params {
@@ -134,6 +135,8 @@ class MLSuite extends MLHelper {
   // Estimator/Model works
   test("LogisticRegression works") {
     val sessionHolder = SparkConnectTestUtils.createDummySessionHolder(spark)
+    sessionHolder.session.conf
+      .set(Connect.CONNECT_SESSION_CONNECT_ML_CACHE_OFFLOADING_ENABLED.key, "false")
 
     // estimator read/write
     val ret = readWrite(sessionHolder, getLogisticRegression, getMaxIter)
@@ -258,6 +261,8 @@ class MLSuite extends MLHelper {
 
   test("Exception: cannot retrieve object") {
     val sessionHolder = SparkConnectTestUtils.createDummySessionHolder(spark)
+    sessionHolder.session.conf
+      .set(Connect.CONNECT_SESSION_CONNECT_ML_CACHE_OFFLOADING_ENABLED.key, "false")
     val modelId = trainLogisticRegressionModel(sessionHolder)
 
     // Fetch summary attribute
@@ -378,5 +383,44 @@ class MLSuite extends MLHelper {
         .asScala
         .map(_.getString)
         .toArray sameElements Array("a", "b", "c"))
+  }
+
+  test("MLCache offloading works") {
+    val sessionHolder = SparkConnectTestUtils.createDummySessionHolder(spark)
+    sessionHolder.session.conf
+      .set(Connect.CONNECT_SESSION_CONNECT_ML_CACHE_OFFLOADING_ENABLED.key, "true")
+
+    val memorySizeBytes = 1024 * 16
+    sessionHolder.session.conf.set(
+      Connect.CONNECT_SESSION_CONNECT_ML_CACHE_OFFLOADING_MAX_IN_MEMORY_SIZE.key,
+      memorySizeBytes)
+    val modelIdList = scala.collection.mutable.ListBuffer[String]()
+    modelIdList.append(trainLogisticRegressionModel(sessionHolder))
+    assert(sessionHolder.mlCache.cachedModel.size() == 1)
+    assert(sessionHolder.mlCache.totalSizeBytes.get() > 0)
+    val modelSizeBytes = sessionHolder.mlCache.totalSizeBytes.get()
+    val maxNumModels = memorySizeBytes / modelSizeBytes.toInt
+
+    // All models will be kept if the total size is less than the memory limit.
+    for (i <- 1 until maxNumModels) {
+      modelIdList.append(trainLogisticRegressionModel(sessionHolder))
+      assert(sessionHolder.mlCache.cachedModel.size() == i + 1)
+      assert(sessionHolder.mlCache.totalSizeBytes.get() > 0)
+      assert(sessionHolder.mlCache.totalSizeBytes.get() <= memorySizeBytes)
+    }
+
+    // Old models will be offloaded
+    // if new ones are added and the total size exceeds the memory limit.
+    for (_ <- 0 until 3) {
+      modelIdList.append(trainLogisticRegressionModel(sessionHolder))
+      assert(sessionHolder.mlCache.cachedModel.size() == maxNumModels)
+      assert(sessionHolder.mlCache.totalSizeBytes.get() > 0)
+      assert(sessionHolder.mlCache.totalSizeBytes.get() <= memorySizeBytes)
+    }
+
+    // Assert all models can be loaded back from disk after they are offloaded.
+    for (modelId <- modelIdList) {
+      assert(sessionHolder.mlCache.get(modelId) != null)
+    }
   }
 }

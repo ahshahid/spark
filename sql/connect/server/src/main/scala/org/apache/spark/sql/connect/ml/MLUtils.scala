@@ -37,7 +37,7 @@ import org.apache.spark.ml.param.Params
 import org.apache.spark.ml.recommendation._
 import org.apache.spark.ml.regression._
 import org.apache.spark.ml.tree.{DecisionTreeModel, TreeEnsembleModel}
-import org.apache.spark.ml.util.{ConnectHelper, HasTrainingSummary, Identifiable, MLWritable}
+import org.apache.spark.ml.util.{ConnectHelper, HasTrainingSummary, Identifiable, MLReader, MLWritable}
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.catalyst.analysis.RelationWrapper
 import org.apache.spark.sql.classic.Dataset
@@ -412,16 +412,28 @@ private[ml] object MLUtils {
       sessionHolder: SessionHolder,
       className: String,
       path: String,
-      operatorClass: Class[T]): T = {
+      operatorClass: Class[T],
+      loadFromLocal: Boolean = false): T = {
     val name = replaceOperator(sessionHolder, className)
     val operators = loadOperators(operatorClass)
     if (operators.isEmpty || !operators.contains(name)) {
       throw MlUnsupportedException(s"Unsupported read for $name")
     }
-    operators(name)
-      .getMethod("load", classOf[String])
-      .invoke(null, path)
-      .asInstanceOf[T]
+    try {
+      val clazz = operators(name)
+      val loaded = if (loadFromLocal) {
+        val loader = clazz.getMethod("read").invoke(null).asInstanceOf[MLReader[T]]
+        loader.loadFromLocal(path)
+      } else {
+        clazz
+          .getMethod("load", classOf[String])
+          .invoke(null, path)
+      }
+      loaded.asInstanceOf[T]
+    } catch {
+      case e: InvocationTargetException if e.getCause != null =>
+        throw e.getCause
+    }
   }
 
   /**
@@ -440,8 +452,14 @@ private[ml] object MLUtils {
   def loadTransformer(
       sessionHolder: SessionHolder,
       className: String,
-      path: String): Transformer = {
-    loadOperator(sessionHolder, className, path, classOf[Transformer])
+      path: String,
+      loadFromLocal: Boolean = false): Transformer = {
+    loadOperator(
+      sessionHolder,
+      className,
+      path,
+      classOf[Transformer],
+      loadFromLocal = loadFromLocal)
   }
 
   /**
@@ -623,8 +641,8 @@ private[ml] object MLUtils {
         "isDistributed",
         "logLikelihood",
         "logPerplexity",
-        "describeTopics")),
-    (classOf[LocalLDAModel], Set("vocabSize")),
+        "describeTopics",
+        "vocabSize")),
     (
       classOf[DistributedLDAModel],
       Set("trainingLogLikelihood", "logPrior", "getCheckpointFiles", "toLocal")),

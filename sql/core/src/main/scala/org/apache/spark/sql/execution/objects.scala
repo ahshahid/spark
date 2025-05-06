@@ -36,6 +36,8 @@ import org.apache.spark.sql.catalyst.plans.ReferenceAllColumns
 import org.apache.spark.sql.catalyst.plans.logical.{EventTimeWatermark, FunctionUtils, LogicalGroupState}
 import org.apache.spark.sql.catalyst.plans.physical._
 import org.apache.spark.sql.catalyst.types.DataTypeUtils
+import org.apache.spark.sql.errors.QueryExecutionErrors
+import org.apache.spark.sql.execution.python.BatchIterator
 import org.apache.spark.sql.execution.r.ArrowRRunner
 import org.apache.spark.sql.execution.streaming.GroupStateImpl
 import org.apache.spark.sql.internal.SQLConf
@@ -218,13 +220,17 @@ case class MapPartitionsInRWithArrowExec(
     child: SparkPlan) extends UnaryExecNode {
   override def producedAttributes: AttributeSet = AttributeSet(output)
 
+  private val batchSize = conf.arrowMaxRecordsPerBatch
+
   override def outputPartitioning: Partitioning = child.outputPartitioning
 
   override protected def doExecute(): RDD[InternalRow] = {
     child.execute().mapPartitionsInternal { inputIter =>
       val outputTypes = schema.map(_.dataType)
 
-      val batchIter = Iterator(inputIter)
+      // DO NOT use iter.grouped(). See BatchIterator.
+      val batchIter =
+        if (batchSize > 0) new BatchIterator(inputIter, batchSize) else Iterator(inputIter)
 
       val runner = new ArrowRRunner(func, packageNames, broadcastVars, inputSchema,
         SQLConf.get.sessionLocalTimeZone, RRunnerModes.DATAFRAME_DAPPLY)
@@ -247,8 +253,10 @@ case class MapPartitionsInRWithArrowExec(
       val outputProject = UnsafeProjection.create(output, output)
       columnarBatchIter.flatMap { batch =>
         val actualDataTypes = (0 until batch.numCols()).map(i => batch.column(i).dataType())
-        assert(outputTypes == actualDataTypes, "Invalid schema from dapply(): " +
-          s"expected ${outputTypes.mkString(", ")}, got ${actualDataTypes.mkString(", ")}")
+        if (outputTypes != actualDataTypes) {
+          throw QueryExecutionErrors.arrowDataTypeMismatchError(
+            "dapply()", outputTypes, actualDataTypes)
+        }
         batch.rowIterator.asScala
       }.map(outputProject)
     }
@@ -593,8 +601,10 @@ case class FlatMapGroupsInRWithArrowExec(
 
       columnarBatchIter.flatMap { batch =>
         val actualDataTypes = (0 until batch.numCols()).map(i => batch.column(i).dataType())
-        assert(outputTypes == actualDataTypes, "Invalid schema from gapply(): " +
-          s"expected ${outputTypes.mkString(", ")}, got ${actualDataTypes.mkString(", ")}")
+        if (outputTypes != actualDataTypes) {
+          throw QueryExecutionErrors.arrowDataTypeMismatchError(
+            "gapply()", outputTypes, actualDataTypes)
+        }
         batch.rowIterator().asScala
       }.map(outputProject)
     }

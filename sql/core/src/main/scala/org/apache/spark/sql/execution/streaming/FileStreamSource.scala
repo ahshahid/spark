@@ -317,7 +317,7 @@ class FileStreamSource(
         options = optionsForInnerDataSource)
     implicit val withRelations: Set[RelationWrapper] = Set.empty
     Dataset.ofRows(sparkSession, LogicalRelation(newDataSource.resolveRelation(
-      checkFilesExist = false), isStreaming = true))
+      checkFilesExist = false, readOnly = true), isStreaming = true))
   }
 
   /**

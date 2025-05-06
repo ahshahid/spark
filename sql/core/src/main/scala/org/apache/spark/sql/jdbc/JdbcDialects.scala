@@ -411,9 +411,9 @@ abstract class JdbcDialect extends Serializable with Logging {
       s"CAST($expr AS $databaseTypeDefinition)"
     }
 
-    override def visitSQLFunction(funcName: String, inputs: Array[String]): String = {
+    override def visitSQLFunction(funcName: String, inputs: Array[Expression]): String = {
       if (isSupportedFunction(funcName)) {
-        s"""${dialectFunctionName(funcName)}(${inputs.mkString(", ")})"""
+        super.visitSQLFunction(funcName, inputs)
       } else {
         // The framework will catch the error and give up the push-down.
         // Please see `JdbcDialect.compileExpression(expr: Expression)` for more details.
@@ -425,8 +425,12 @@ abstract class JdbcDialect extends Serializable with Logging {
       }
     }
 
+    override def visitSQLFunction(funcName: String, inputs: Array[String]): String = {
+      s"""${dialectFunctionName(funcName)}(${inputs.mkString(", ")})"""
+    }
+
     override def visitAggregateFunction(
-        funcName: String, isDistinct: Boolean, inputs: Array[String]): String = {
+        funcName: String, isDistinct: Boolean, inputs: Array[Expression]): String = {
       if (isSupportedFunction(funcName)) {
         super.visitAggregateFunction(dialectFunctionName(funcName), isDistinct, inputs)
       } else {
@@ -436,6 +440,11 @@ abstract class JdbcDialect extends Serializable with Logging {
             "class" -> this.getClass.getSimpleName,
             "funcName" -> funcName))
       }
+    }
+
+    override def visitAggregateFunction(
+        funcName: String, isDistinct: Boolean, inputs: Array[String]): String = {
+      super.visitAggregateFunction(dialectFunctionName(funcName), isDistinct, inputs)
     }
 
     override def visitInverseDistributionFunction(
@@ -862,7 +871,7 @@ abstract class JdbcDialect extends Serializable with Logging {
 /**
  * Make the `classifyException` method throw out the original exception
  */
-trait NoLegacyJDBCError extends JdbcDialect {
+private[sql] trait NoLegacyJDBCError extends JdbcDialect {
 
   override def classifyException(
       e: Throwable,
