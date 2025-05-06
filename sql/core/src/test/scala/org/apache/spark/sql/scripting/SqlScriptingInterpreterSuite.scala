@@ -875,7 +875,8 @@ class SqlScriptingInterpreterSuite extends QueryTest with SharedSparkSession {
         parameters = Map(
           "expression" -> "'one'",
           "sourceType" -> "\"STRING\"",
-          "targetType" -> "\"BIGINT\""),
+          "targetType" -> "\"BIGINT\"",
+          "ansiConfig" -> f"\"${SQLConf.ANSI_ENABLED.key}\""),
         context = ExpectedContext(fragment = "", start = -1, stop = -1))
     }
     withSQLConf(SQLConf.ANSI_ENABLED.key -> "false") {
@@ -1844,6 +1845,33 @@ class SqlScriptingInterpreterSuite extends QueryTest with SharedSparkSession {
       Seq(Row(3)) // select x
     )
     verifySqlScriptResult(sqlScriptText, expected)
+  }
+
+  test("for statement - mixed case variable names") {
+    val sqlScript =
+      """
+        |BEGIN
+        |  DECLARE sum INT = 0;
+        |  FOR LoopCursor AS (SELECT * FROM VALUES (1), (2), (3) AS tbl(RowValue)) DO
+        |    SET sum = sum + LoopCursor.RowValue;
+        |  END FOR;
+        |  SELECT sum;
+        |END
+        |""".stripMargin
+    val expected = Seq(
+      Seq.empty[Row], // declare sum
+      Seq.empty[Row], // declare RowValue
+      Seq.empty[Row], // set RowValue
+      Seq.empty[Row], // set sum
+      Seq.empty[Row], // declare RowValue
+      Seq.empty[Row], // set RowValue
+      Seq.empty[Row], // set sum
+      Seq.empty[Row], // declare RowValue
+      Seq.empty[Row], // set RowValue
+      Seq.empty[Row], // set sum
+      Seq(Row(6)) // select
+    )
+    verifySqlScriptResult(sqlScript, expected)
   }
 
   test("for statement - enters body once") {
