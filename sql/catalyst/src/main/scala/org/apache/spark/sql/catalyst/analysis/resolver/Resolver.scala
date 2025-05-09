@@ -31,7 +31,7 @@ import org.apache.spark.sql.catalyst.analysis.{
   UnresolvedRelation,
   UnresolvedSubqueryColumnAliases
 }
-import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeSet, Expression, NamedExpression}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeSet, Expression}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.trees.CurrentOrigin.withOrigin
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag

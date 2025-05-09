@@ -110,7 +110,8 @@ case class UnionLoopExec(
     } else {
       plan
     }
-    val df = Dataset.ofRows(session, planWithLimit)
+
+    val df = Dataset.ofRows(session, planWithLimit)(Set.empty)
 
     df.queryExecution.optimizedPlan match {
       case l: LocalRelation =>
@@ -121,7 +122,7 @@ case class UnionLoopExec(
           projection.initialize(0)
           val local = LocalRelation(projectList.map(_.toAttribute),
             Seq(projection(InternalRow.empty)))
-          (Dataset.ofRows(session, local), 1.toLong)
+          (Dataset.ofRows(session, local)(df.queryExecution.getRelations), 1.toLong)
         } else {
           (df, 1.toLong)
         }
@@ -135,7 +136,7 @@ case class UnionLoopExec(
         // using the ConvertToLocalRelation rule, which significantly improves runtime.
         if (count <= localRelationLimit) {
           val local = LocalRelation.fromExternalRows(anchor.output, df.collect().toIndexedSeq)
-         (Dataset.ofRows(session, local), count)
+         (Dataset.ofRows(session, local)(df.queryExecution.getRelations), count)
         } else {
           (materializedDF, count)
         }
@@ -258,9 +259,9 @@ case class UnionLoopExec(
     } else {
       val df = {
         if (unionChildren.length == 1) {
-          Dataset.ofRows(session, unionChildren.head)
+          Dataset.ofRows(session, unionChildren.head)(prevDF.queryExecution.getRelations)
         } else {
-          Dataset.ofRows(session, Union(unionChildren.toSeq))
+          Dataset.ofRows(session, Union(unionChildren.toSeq))(prevDF.queryExecution.getRelations)
         }
       }
       val coalescedDF = df.coalesce(numPartitions)
